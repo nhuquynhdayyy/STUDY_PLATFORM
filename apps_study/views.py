@@ -13,6 +13,9 @@ from django.contrib.auth.views import LoginView, LogoutView
 from django.views.generic import CreateView
 from django.urls import reverse_lazy
 from .forms import UserRegisterForm, SubjectForm
+from django.http import JsonResponse
+from datetime import timedelta
+from django.db import models
 
 class DashboardView(LoginRequiredMixin, View):
     def get(self, request):
@@ -66,16 +69,65 @@ class StopStudyAction(LoginRequiredMixin, View):
         
         return redirect('dashboard')
     
+class StatisticsView(LoginRequiredMixin, TemplateView):
+    template_name = 'statistics.html'
+
 class StudyStatsAPI(LoginRequiredMixin, View):
     def get(self, request):
-        data = StudySession.objects.filter(user=request.user, status='completed') \
-            .values('subject__name') \
-            .annotate(total_duration=Sum('duration'))
-        
-        labels = [item['subject__name'] for item in data]
-        durations = [item['total_duration'] / 60 for item in data] # Đổi sang phút
-        
-        return JsonResponse({'labels': labels, 'data': durations})
+        preset = request.GET.get('preset', '1week')
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+
+        now = timezone.now()
+        # Đảm bảo dùng đúng filter như trang History
+        query_filter = models.Q(user=request.user, status='completed')
+
+        # Xử lý filter thời gian
+        if preset == '1day':
+            query_filter &= models.Q(end_time__gte=now - timedelta(days=1))
+        elif preset == '1week':
+            query_filter &= models.Q(end_time__gte=now - timedelta(days=7))
+        elif preset == '1month':
+            query_filter &= models.Q(end_time__gte=now - timedelta(days=30))
+        elif preset == 'custom' and start_date_str and end_date_str:
+            query_filter &= models.Q(end_time__date__range=[start_date_str, end_date_str])
+
+        # Aggregation
+        stats = StudySession.objects.filter(query_filter) \
+            .values('subject__name', 'subject__color') \
+            .annotate(total_sec=Sum('duration')) \
+            .order_by('-total_sec')
+
+        labels = []
+        chart_data = []
+        colors = []
+        table_data = []
+
+        for item in stats:
+            name = item['subject__name']
+            total_sec = item['total_sec'] or 0
+            
+            # Tính toán hiển thị
+            minutes = round(total_sec / 60, 2)
+            hours = round(total_sec / 3600, 2)
+            
+            labels.append(name)
+            # Nếu tổng thời gian quá ngắn, dùng Phút để vẽ biểu đồ cho rõ
+            chart_data.append(minutes if hours < 1 else hours)
+            colors.append(item['subject__color'] or "#3b82f6")
+            
+            table_data.append({
+                'subject': name,
+                'display_time': f"{int(total_sec//60)}m {total_sec%60}s",
+                'raw_minutes': minutes
+            })
+
+        return JsonResponse({
+            'labels': labels,
+            'unit': 'Minutes' if max(chart_data or [0]) < 60 else 'Hours',
+            'datasets': [{'data': chart_data, 'backgroundColor': colors}],
+            'table': table_data
+        })
     
 class CreateSubjectView(LoginRequiredMixin, View):
     def post(self, request):

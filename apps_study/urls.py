@@ -1,6 +1,6 @@
 from django.urls import path
 from django.contrib.auth.views import LoginView, LogoutView
-from .views import DashboardView, StartStudyAction, StopStudyAction, CreateSubjectView, HistoryListView, RegisterView, SubjectListView, SubjectCreateView
+from .views import DashboardView, StartStudyAction, StatisticsView, StopStudyAction, CreateSubjectView, HistoryListView, RegisterView, StudyStatsAPI, SubjectListView, SubjectCreateView
 
 urlpatterns = [
     # Auth
@@ -16,4 +16,6 @@ urlpatterns = [
     path('history/', HistoryListView.as_view(), name='history'),
     path('subjects/', SubjectListView.as_view(), name='subject_list'),
     path('subjects/create/', SubjectCreateView.as_view(), name='subject_create'),
+    path('statistics/', StatisticsView.as_view(), name='statistics'),
+    path('api/stats/', StudyStatsAPI.as_view(), name='api_stats'),
 ]

@@ -1,0 +1,126 @@
+<!-- templates/statistics.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-end mb-10">
+        <div>
+            <h1 class="text-3xl font-bold text-slate-800">Learning Analytics</h1>
+            <p class="text-gray-400">Deep dive into your study habits.</p>
+        </div>
+        
+        <!-- BỘ LỌC (FILTER UI) -->
+        <div class="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
+            <button onclick="loadStats('1day')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1day">1 Day</button>
+            <button onclick="loadStats('1week')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1week">1 Week</button>
+            <button onclick="loadStats('1month')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1month">1 Month</button>
+            <div class="h-6 w-[1px] bg-gray-200"></div>
+            <div class="flex items-center gap-2 px-2">
+                <input type="date" id="start_date" class="text-xs border-none bg-slate-50 rounded-lg p-1">
+                <span class="text-gray-300">to</span>
+                <input type="date" id="end_date" class="text-xs border-none bg-slate-50 rounded-lg p-1">
+                <button onclick="loadStats('custom')" class="bg-slate-900 text-white p-2 rounded-lg hover:bg-black"><i class="fas fa-search text-xs"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- BIỂU ĐỒ (CHART) -->
+        <div class="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <h3 class="font-bold text-slate-800 mb-6">Focus Hours by Subject</h3>
+            <div class="relative h-[400px]">
+                <canvas id="statsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- BẢNG TỔNG HỢP (SUMMARY TABLE) -->
+        <div class="lg:col-span-1 bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <h3 class="font-bold text-slate-800 mb-6">Details</h3>
+            <div class="space-y-6" id="stats-table-body">
+                <!-- Data will be injected here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let myChart;
+
+// Thay thế hàm loadStats cũ trong statistics.html
+async function loadStats(preset) {
+    // 1. UI Feedback
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white');
+        btn.classList.add('text-gray-500');
+    });
+    const activeBtn = document.getElementById('btn-' + preset);
+    if(activeBtn) {
+        activeBtn.classList.remove('text-gray-500');
+        activeBtn.classList.add('bg-blue-600', 'text-white');
+    }
+
+    let url = `/api/stats/?preset=${preset}`;
+    if (preset === 'custom') {
+        url += `&start_date=${document.getElementById('start_date').value}&end_date=${document.getElementById('end_date').value}`;
+    }
+
+    try {
+        const response = await fetch(url);
+        const result = await response.json();
+
+        // 2. Vẽ biểu đồ
+        const ctx = document.getElementById('statsChart').getContext('2d');
+        if (myChart) myChart.destroy();
+        
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: result.labels,
+                datasets: [{
+                    label: `Study Time (${result.unit})`,
+                    data: result.datasets[0].data,
+                    backgroundColor: result.datasets[0].backgroundColor,
+                    borderRadius: 10,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        title: { display: true, text: result.unit }
+                    }
+                }
+            }
+        });
+
+        // 3. Hiển thị danh sách Details (giống cột bên phải mockup)
+        const tableBody = document.getElementById('stats-table-body');
+        if (result.table.length === 0) {
+            tableBody.innerHTML = `<div class="text-center py-20 text-gray-400 italic">No data found. Start studying!</div>`;
+        } else {
+            tableBody.innerHTML = result.table.map(row => `
+                <div class="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-blue-100 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="w-2 h-8 rounded-full bg-blue-500"></div>
+                        <div>
+                            <p class="font-bold text-slate-800">${row.subject}</p>
+                            <p class="text-[10px] text-gray-400 uppercase tracking-widest">Total Focused</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-mono font-bold text-blue-600">${row.display_time}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error("Lỗi tải thống kê:", error);
+    }
+}
+
+// Tự động load 1 tuần khi vừa vào trang
+window.onload = () => loadStats('1week');
+</script>
+{% endblock %}
