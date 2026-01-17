@@ -1,0 +1,43 @@
+<!-- templates/registration/register.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-10 rounded-[2.5rem] shadow-xl w-full max-w-md border border-gray-100">
+        <h1 class="text-2xl font-bold text-slate-800 mb-2">Create Account</h1>
+        <p class="text-gray-400 text-sm mb-8">Join the community of focused students</p>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="space-y-4">
+                {% for field in form %}
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-2">{{ field.label }}</label>
+                    <div class="w-full">
+                        {{ field }}
+                    </div>
+                    {% if field.errors %}
+                        <p class="text-red-500 text-[10px] mt-1">{{ field.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition mt-4">
+                    Get Started
+                </button>
+            </div>
+        </form>
+
+        <p class="text-center mt-8 text-sm text-gray-500">
+            Already have an account? <a href="{% url 'login' %}" class="text-blue-600 font-bold hover:underline">Log in</a>
+        </p>
+    </div>
+
+    <style>
+        /* CSS để làm input của Django form đẹp hơn */
+        input { @apply w-full px-5 py-3 rounded-xl bg-slate-50 border-none focus:ring-2 focus:ring-blue-500 transition; }
+    </style>
+</body>
+</html>

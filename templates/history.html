@@ -1,0 +1,37 @@
+<!-- templates/history.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="mb-10">
+    <h1 class="text-3xl font-bold text-slate-800">Study History</h1>
+    <p class="text-gray-400">Review all your past learning sessions.</p>
+</div>
+
+<div class="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+    <table class="w-full text-left border-collapse">
+        <thead class="bg-slate-900 text-white">
+            <tr class="text-[10px] uppercase tracking-widest">
+                <th class="px-8 py-5 font-semibold">Subject</th>
+                <th class="px-8 py-5 font-semibold">Date</th>
+                <th class="px-8 py-5 font-semibold">Time</th>
+                <th class="px-8 py-5 text-right font-semibold">Total Duration</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+            {% for record in history %}
+            <tr class="hover:bg-slate-50 transition">
+                <td class="px-8 py-5 font-bold text-gray-800">{{ record.subject.name }}</td>
+                <td class="px-8 py-5 text-gray-500">{{ record.end_time|date:"l, d M Y" }}</td>
+                <td class="px-8 py-5 text-gray-400 italic text-sm">{{ record.start_time|date:"H:i" }} to {{ record.end_time|date:"H:i" }}</td>
+                <td class="px-8 py-5 text-right font-mono font-bold text-teal-600" id="dur-history-{{ record.id }}">
+                    <script>
+                        var s = {{ record.duration }};
+                        document.write(Math.floor(s/3600) + "h " + Math.floor((s%3600)/60) + "m " + (s%60) + "s");
+                    </script>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

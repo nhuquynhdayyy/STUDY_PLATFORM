@@ -1,0 +1,67 @@
+<!-- templates/subjects.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-10">
+        <div>
+            <h1 class="text-3xl font-bold text-slate-800">My Subjects</h1>
+            <p class="text-gray-400">Manage your learning categories.</p>
+        </div>
+        <!-- Nút mở modal/form nhanh (Tùy biến) -->
+        <label for="modal-create" class="cursor-pointer bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition">
+            <i class="fas fa-plus mr-2"></i> New Subject
+        </label>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- CỘT BÊN TRÁI: DANH SÁCH MÔN HỌC -->
+        <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for s in subjects %}
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition">
+                <div class="flex justify-between items-start">
+                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style="background-color: {{ s.color }};">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <span class="text-[10px] text-gray-300 font-mono">#ID{{ s.id }}</span>
+                </div>
+                <h3 class="text-xl font-bold text-slate-800 mt-6 mb-1">{{ s.name }}</h3>
+                <p class="text-gray-400 text-xs mb-6">Created on {{ s.created_at|date:"M d, Y" }}</p>
+                <div class="flex gap-2">
+                    <a href="#" class="text-xs font-bold text-blue-600 hover:underline">Edit</a>
+                    <span class="text-gray-200">|</span>
+                    <a href="#" class="text-xs font-bold text-red-400 hover:underline">Delete</a>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-span-full bg-slate-100 border-2 border-dashed border-slate-200 rounded-[2rem] p-12 text-center">
+                <p class="text-gray-400 italic">You haven't added any subjects yet.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- CỘT BÊN PHẢI: FORM TẠO MỚI (STUCK ON SIDEBAR) -->
+        <div class="lg:col-span-1">
+            <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 sticky top-10">
+                <h2 class="text-xl font-bold text-slate-800 mb-6">Create New</h2>
+                <form action="{% url 'subject_create' %}" method="POST">
+                    {% csrf_token %}
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Subject Name</label>
+                            {{ form.name }}
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Identify Color</label>
+                            {{ form.color }}
+                        </div>
+                        <button type="submit" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition transform active:scale-95">
+                            Save Subject
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,59 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-50 font-sans flex min-h-screen">
+    
+    <!-- DUY NHẤT 1 SIDEBAR Ở ĐÂY -->
+    <aside class="w-64 bg-white border-r flex flex-col p-6 fixed h-full z-10">
+        <div class="flex items-center gap-2 mb-10">
+            <div class="bg-blue-600 p-2 rounded-lg text-white"><i class="fas fa-graduation-cap"></i></div>
+            <h1 class="text-xl font-bold italic text-slate-800">StudyFlow</h1>
+        </div>
+        
+        <nav class="flex-1 space-y-2">
+            <a href="{% url 'dashboard' %}" class="flex items-center gap-3 p-3 {% if request.resolver_match.url_name == 'dashboard' %}bg-blue-50 text-blue-600 font-bold{% else %}text-gray-400 hover:bg-gray-50{% endif %} rounded-xl transition">
+                <i class="fas fa-th-large"></i> Dashboard
+            </a>
+            <a href="#" class="flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-50 rounded-xl transition">
+                <i class="fas fa-calendar"></i> Schedule
+            </a>
+            <a href="{% url 'subject_list' %}" class="flex items-center gap-3 p-3 {% if request.resolver_match.url_name == 'subject_list' %}bg-blue-50 text-blue-600 font-bold{% else %}text-gray-400 hover:bg-gray-50{% endif %} rounded-xl transition">
+                <i class="fas fa-book"></i> My Subjects
+            </a>
+            <a href="{% url 'history' %}" class="flex items-center gap-3 p-3 {% if request.resolver_match.url_name == 'history' %}bg-blue-50 text-blue-600 font-bold{% else %}text-gray-400 hover:bg-gray-50{% endif %} rounded-xl transition">
+                <i class="fas fa-history"></i> History
+            </a>
+
+            <form action="{% url 'logout' %}" method="post" class="mt-4">
+                {% csrf_token %}
+                <button type="submit" class="w-full flex items-center gap-3 p-3 text-red-400 hover:bg-red-50 rounded-xl transition">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </form>
+        </nav>
+
+        <!-- User Profile Bottom -->
+        <div class="mt-auto flex items-center gap-3 p-2 border-t pt-4">
+            <div class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold">
+                {{ user.username|slice:":2"|upper }}
+            </div>
+            <div class="overflow-hidden">
+                <p class="text-sm font-bold text-slate-800 truncate">{{ user.username }}</p>
+                <p class="text-[10px] text-gray-400 truncate">{{ user.email|default:"student@studyflow.com" }}</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 ml-64 p-10">
+        {% block content %}{% endblock %}
+    </main>
+
+</body>
+</html>
