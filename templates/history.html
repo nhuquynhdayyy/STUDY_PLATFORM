@@ -2,42 +2,78 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="mb-10">
-    <h1 class="text-3xl font-bold text-slate-800">Study History</h1>
-    <p class="text-gray-400">Review all your past learning sessions.</p>
+<div class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-800">Study History</h1>
+        <p class="text-gray-400">Review all your past learning sessions.</p>
+
+        <!-- TAB SWITCHER -->
+        <div class="flex bg-slate-200 p-1 rounded-xl mt-6 w-fit">
+            <a href="?type=solo" class="px-6 py-2 rounded-lg text-sm font-bold transition {% if current_type == 'solo' %}bg-white text-blue-600 shadow-sm{% else %}text-gray-500 hover:text-slate-700{% endif %}">
+                <i class="fas fa-user-graduate mr-2"></i> Solo History
+            </a>
+            <a href="?type=group" class="px-6 py-2 rounded-lg text-sm font-bold transition {% if current_type == 'group' %}bg-white text-blue-600 shadow-sm{% else %}text-gray-500 hover:text-slate-700{% endif %}">
+                <i class="fas fa-users mr-2"></i> Group History
+            </a>
+        </div>
+    </div>
 </div>
 
 <div class="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
     <table class="w-full text-left border-collapse">
         <thead class="bg-slate-900 text-white">
             <tr class="text-[10px] uppercase tracking-widest">
-                <th class="px-8 py-5 font-semibold">Subject</th>
+                <th class="px-8 py-5 font-semibold">{% if current_type == 'solo' %}Subject{% else %}Room Name{% endif %}</th>
                 <th class="px-8 py-5 font-semibold">Date</th>
-                <th class="px-8 py-5 font-semibold">Time</th>
-                <th class="px-8 py-5 text-right font-semibold">Total Duration</th>
+                <th class="px-8 py-5 font-semibold">Time Range</th>
+                <th class="px-8 py-5 text-right font-semibold">Duration</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
             {% for record in history %}
             <tr class="hover:bg-slate-50 transition">
+                <!-- Cột 1: Tên (Solo hoặc Group) -->
                 <td class="px-8 py-5 font-bold text-gray-800">
-                    <div class="flex items-center gap-2">
-                        <div class="w-1.5 h-1.5 rounded-full" style="background-color: {{ record.get_color }}"></div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full" style="background-color: {{ record.get_color }}"></div>
                         {{ record.display_name }}
                     </div>
                 </td>
                 
-                <td class="px-8 py-5 text-gray-500">{{ record.end_time|date:"l, d M Y" }}</td>
-                <td class="px-8 py-5 text-gray-400 italic text-sm">{{ record.start_time|date:"H:i" }} to {{ record.end_time|date:"H:i" }}</td>
+                <!-- Cột 2: Ngày tháng -->
+                <td class="px-8 py-5 text-gray-500 text-sm">
+                    {{ record.end_time|date:"D, d M Y" }}
+                </td>
+
+                <!-- Cột 3: Khoảng thời gian -->
+                <td class="px-8 py-5 text-gray-400 italic text-xs">
+                    {{ record.start_time|date:"H:i" }} — {{ record.end_time|date:"H:i" }}
+                </td>
                 
-                <td class="px-8 py-5 text-right font-mono font-bold text-teal-600" id="dur-history-{{ record.id }}">
+                <!-- Cột 4: Tổng thời lượng -->
+                <td class="px-8 py-5 text-right font-mono font-bold text-teal-600">
+                    <span id="dur-h-{{ record.id }}"></span>
                     <script>
-                        var s = {{ record.duration }};
-                        var h = Math.floor(s/3600);
-                        var m = Math.floor((s%3600)/60);
-                        var sec = s % 60;
-                        document.write(h + "h " + m + "m " + sec + "s");
+                        (function() {
+                            var s = {{ record.duration }};
+                            var h = Math.floor(s/3600);
+                            var m = Math.floor((s%3600)/60);
+                            var sec = s % 60;
+                            var text = "";
+                            if(h > 0) text += h + "h ";
+                            text += m + "m " + sec + "s";
+                            document.getElementById("dur-h-{{ record.id }}").innerText = text;
+                        })();
                     </script>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="px-8 py-20 text-center text-gray-400 italic">
+                    <div class="flex flex-col items-center gap-4">
+                        <i class="fas fa-folder-open text-4xl text-slate-200"></i>
+                        <p>No history found for this category yet.</p>
+                    </div>
                 </td>
             </tr>
             {% endfor %}

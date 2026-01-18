@@ -47,9 +47,21 @@ class HistoryListView(LoginRequiredMixin, ListView):
     context_object_name = 'history'
 
     def get_queryset(self):
+        # 1. Lấy loại history từ URL (?type=solo hoặc group), mặc định là solo
+        session_type = self.request.GET.get('type', 'solo')
+        
+        # 2. Lọc dữ liệu theo User, trạng thái hoàn thành và loại phiên học
         return StudySession.objects.filter(
-            user=self.request.user, status='completed'
+            user=self.request.user, 
+            status='completed',
+            session_type=session_type
         ).select_related('subject', 'group_room').order_by('-end_time')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # 3. Gửi 'current_type' về template để active tab tương ứng
+        context['current_type'] = self.request.GET.get('type', 'solo')
+        return context
 
 class StartStudyAction(LoginRequiredMixin, View):
     def post(self, request):
