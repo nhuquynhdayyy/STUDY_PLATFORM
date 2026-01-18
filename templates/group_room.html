@@ -4,30 +4,40 @@
 <div class="bg-slate-900 min-h-screen text-white p-8">
     <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-bold">{{ room.name }} <span class="text-sm font-mono text-gray-500">#{{ room.room_code }}</span></h2>
-        <a href="{% url 'dashboard' %}" class="bg-red-600 px-6 py-2 rounded-xl font-bold">Leave Room</a>
+        <form action="{% url 'leave_room' room.room_code %}" method="POST">
+            {% csrf_token %}
+            <button type="submit" class="bg-red-600 px-6 py-2 rounded-xl font-bold hover:bg-red-700 transition">
+                Leave Room
+            </button>
+        </form>
     </div>
 
-    <!-- Video Grid -->
     <div id="video-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- Video của chính mình -->
-        <div class="relative bg-black rounded-3xl overflow-hidden aspect-video border-2 border-blue-500">
+        <div class="relative bg-black rounded-3xl overflow-hidden aspect-video border-2 {% if user == room.host %}border-yellow-500{% else %}border-blue-500{% endif %} shadow-xl">
             <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
-            <div class="absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded-lg text-xs">You (Host)</div>
+            <div class="absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded-lg text-xs font-bold">
+                {{ user.username }} (You)
+                {% if user == room.host %}<span class="text-yellow-400 font-bold ml-1">★ HOST</span>{% endif %}
+            </div>
         </div>
     </div>
 </div>
 
 <script>
+// 1. KHAI BÁO BIẾN HOST ĐỂ DÙNG TRONG JS
+const roomHost = "{{ room.host.username }}"; 
+const currentUsername = "{{ user.username }}";
 const roomCode = "{{ room.room_code }}";
+
 const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
 const socket = new WebSocket(`${wsScheme}://${window.location.host}/ws/study/${roomCode}/`);
-
 const videoGrid = document.getElementById('video-grid');
 const localVideo = document.getElementById('localVideo');
 let localStream;
-const peers = {}; // Lưu trữ RTCPeerConnection của các thành viên khác
+const peers = {}; 
+const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-// 1. Lấy Camera/Mic
 navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
     localStream = stream;
     localVideo.srcObject = stream;
@@ -35,13 +45,10 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream =>
 
 socket.onmessage = async (event) => {
     const data = JSON.parse(event.data);
-
-    // Có người mới vào -> Gửi Offer cho họ
     if (data.type === "new_peer") {
         initPeerConnection(data.channel_name, data.username, true);
     } 
     
-    // Xử lý Signaling
     const { payload, sender_channel, sender_name } = data;
     if (!payload) return;
 
@@ -50,48 +57,59 @@ socket.onmessage = async (event) => {
         await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        socket.send(json({ type: "answer", answer: answer, target: sender_channel }));
-
+        socket.send(JSON.stringify({ type: "answer", answer: answer, target: sender_channel }));
     } else if (payload.type === "answer") {
         await peers[sender_channel].setRemoteDescription(new RTCSessionDescription(payload.answer));
-
     } else if (payload.type === "ice") {
-        await peers[sender_channel].addIceCandidate(new RTCIceCandidate(payload.candidate));
+        if (peers[sender_channel]) await peers[sender_channel].addIceCandidate(new RTCIceCandidate(payload.candidate));
     }
 };
 
 function initPeerConnection(targetChannel, username, isOffer) {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    const pc = new RTCPeerConnection(config);
     peers[targetChannel] = pc;
-
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
     pc.onicecandidate = e => {
-        if (e.candidate) socket.send(json({ type: "ice", candidate: e.candidate, target: targetChannel }));
+        if (e.candidate) socket.send(JSON.stringify({ type: "ice", candidate: e.candidate, target: targetChannel }));
     };
 
     pc.ontrack = e => {
         if (document.getElementById(`video-${targetChannel}`)) return;
+        
+        // KIỂM TRA XEM USER NÀY CÓ PHẢI LÀ HOST KHÔNG
+        const isThisUserHost = (username === roomHost);
+        
         const container = document.createElement('div');
         container.id = `video-${targetChannel}`;
-        container.className = "relative bg-black rounded-3xl overflow-hidden aspect-video border border-slate-700";
+        
+        // SỬA TẠI ĐÂY: Nếu là host thì thêm viền vàng, ngược lại viền xám
+        container.className = `relative bg-black rounded-3xl overflow-hidden aspect-video border-2 ${isThisUserHost ? 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]' : 'border-slate-700'} shadow-lg`;
+        
         const video = document.createElement('video');
         video.srcObject = e.streams[0];
         video.autoplay = true;
+        video.playsinline = true;
         video.className = "w-full h-full object-cover";
+        
+        const nameLabel = document.createElement('div');
+        nameLabel.className = "absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded-lg text-xs font-bold text-white";
+        
+        // SỬA TẠI ĐÂY: Hiển thị nhãn HOST realtime cho mọi người thấy
+        nameLabel.innerHTML = username + (isThisUserHost ? ' <span class="text-yellow-400 font-bold ml-1">★ HOST</span>' : '');
+
         container.appendChild(video);
+        container.appendChild(nameLabel);
         videoGrid.appendChild(container);
     };
 
     if (isOffer) {
         pc.createOffer().then(offer => {
             pc.setLocalDescription(offer);
-            socket.send(json({ type: "offer", offer: offer, target: targetChannel }));
+            socket.send(JSON.stringify({ type: "offer", offer: offer, target: targetChannel }));
         });
     }
     return pc;
 }
-
-function json(obj) { return JSON.stringify(obj); }
 </script>
 {% endblock %}

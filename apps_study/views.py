@@ -156,7 +156,8 @@ class CreateSubjectView(LoginRequiredMixin, View):
         return redirect('dashboard')
 
 def group_room_detail(request, room_code):
-    room = get_object_or_404(GroupRoom, room_code=room_code)
+    # Dùng select_related('host') để lấy thông tin chủ phòng nhanh nhất
+    room = get_object_or_404(GroupRoom.objects.select_related('host'), room_code=room_code)
     return render(request, 'group_room.html', {'room': room})
 
 class RegisterView(CreateView):
@@ -227,3 +228,12 @@ class JoinGroupRoomView(View):
     def post(self, request):
         room_code = request.POST.get('room_code')
         return redirect('group_room_detail', room_code=room_code)
+    
+class LeaveRoomView(LoginRequiredMixin, View):
+    def post(self, request, room_code):
+        # 1. Sử dụng StudyService để kết thúc phiên học hiện tại của user
+        # Hàm end_session chúng ta đã viết trước đó sẽ tìm session 'active' và đóng nó
+        StudyService.end_session(request.user)
+        
+        # 2. Sau khi đã đóng session và lưu lịch sử, chuyển về dashboard
+        return redirect('dashboard')
