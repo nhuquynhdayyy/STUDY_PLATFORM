@@ -19,6 +19,10 @@ from django.db import models
 from django.views import View
 import random
 import string
+from django.views.generic.edit import UpdateView, DeleteView
+from django.contrib.auth.mixins import UserPassesTestMixin
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
 
 class DashboardView(LoginRequiredMixin, View):
     def get(self, request):
@@ -262,3 +266,52 @@ class LeaveRoomView(LoginRequiredMixin, View):
         
         # 2. Sau khi đã đóng session và lưu lịch sử, chuyển về dashboard
         return redirect('dashboard')
+    
+class SubjectUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = Subject
+    form_class = SubjectForm
+    template_name = 'subject_edit.html' # Hoặc reuse form nếu muốn
+    success_url = reverse_lazy('subject_list')
+
+    def test_func(self):
+        # Kiểm tra quyền: subject này phải thuộc về user đang đăng nhập
+        subject = self.get_object()
+        return subject.user == self.request.user
+
+class SubjectDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    model = Subject
+    success_url = reverse_lazy('subject_list')
+
+    def test_func(self):
+        subject = self.get_object()
+        return subject.user == self.request.user
+
+    # Khi xóa, Django mặc định sẽ xóa subject. 
+    # Do trong model StudySession ta đã đặt on_delete=models.SET_NULL, 
+    # nên lịch sử học tập sẽ không bị mất mà chỉ chuyển subject thành NULL (Unknown).
+
+# 1. API lấy thông tin Subject để điền vào Form
+@login_required
+def subject_detail_api(request, pk):
+    subject = get_object_or_404(Subject, pk=pk, user=request.user)
+    return JsonResponse({
+        "id": subject.id,
+        "name": subject.name,
+        "color": subject.color
+    })
+
+# 2. API cập nhật Subject
+@login_required
+@require_http_methods(["POST"])
+def subject_update_api(request, pk):
+    subject = get_object_or_404(Subject, pk=pk, user=request.user)
+    name = request.POST.get('name')
+    color = request.POST.get('color')
+    
+    if name and color:
+        subject.name = name
+        subject.color = color
+        subject.save()
+        return JsonResponse({"status": "success", "name": name, "color": color})
+    
+    return JsonResponse({"status": "error", "message": "Dữ liệu không hợp lệ"}, status=400)

@@ -8,7 +8,6 @@
             <h1 class="text-3xl font-bold text-slate-800">My Subjects</h1>
             <p class="text-gray-400">Manage your learning categories.</p>
         </div>
-        <!-- Nút mở modal/form nhanh (Tùy biến) -->
         <label for="modal-create" class="cursor-pointer bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition">
             <i class="fas fa-plus mr-2"></i> New Subject
         </label>
@@ -18,20 +17,31 @@
         <!-- CỘT BÊN TRÁI: DANH SÁCH MÔN HỌC -->
         <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
             {% for s in subjects %}
-            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition">
+            <div data-subject-id="{{ s.id }}" class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition">
                 <div class="flex justify-between items-start">
-                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style="background-color: {{ s.color }};">
+                    <div class="subject-icon-box w-12 h-12 rounded-2xl flex items-center justify-center text-white" style="background-color: {{ s.color }};">
                         <i class="fas fa-book"></i>
                     </div>
                     <span class="text-[10px] text-gray-300 font-mono">#ID{{ s.id }}</span>
                 </div>
-                <h3 class="text-xl font-bold text-slate-800 mt-6 mb-1">{{ s.name }}</h3>
+                <h3 class="subject-name text-xl font-bold text-slate-800 mt-6 mb-1">{{ s.name }}</h3>
                 <p class="text-gray-400 text-xs mb-6">Created on {{ s.created_at|date:"M d, Y" }}</p>
-                <div class="flex gap-2">
-                    <a href="#" class="text-xs font-bold text-blue-600 hover:underline">Edit</a>
-                    <span class="text-gray-200">|</span>
-                    <a href="#" class="text-xs font-bold text-red-400 hover:underline">Delete</a>
+                
+                <div class="flex items-center gap-2 mt-4"> 
+                    <button type="button" onclick="openEditModal('{{ s.id }}')" 
+                            class="text-xs font-bold text-blue-600 hover:underline leading-none">
+                        Edit
+                    </button>
+                    <span class="text-gray-300 text-[10px]">|</span> 
+                    <button type="button" onclick="confirmDeleteSubject('{{ s.id }}', '{{ s.name }}')" 
+                            class="text-xs font-bold text-red-400 hover:underline leading-none bg-transparent p-0 border-none cursor-pointer outline-none">
+                        Delete
+                    </button>
                 </div>
+
+                <form id="delete-form-{{ s.id }}" action="{% url 'subject_delete' s.id %}" method="POST" style="display:none;">
+                    {% csrf_token %}
+                </form>
             </div>
             {% empty %}
             <div class="col-span-full bg-slate-100 border-2 border-dashed border-slate-200 rounded-[2rem] p-12 text-center">
@@ -40,7 +50,7 @@
             {% endfor %}
         </div>
 
-        <!-- CỘT BÊN PHẢI: FORM TẠO MỚI (STUCK ON SIDEBAR) -->
+        <!-- CỘT BÊN PHẢI: FORM TẠO MỚI -->
         <div class="lg:col-span-1">
             <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 sticky top-10">
                 <h2 class="text-xl font-bold text-slate-800 mb-6">Create New</h2>
@@ -64,4 +74,114 @@
         </div>
     </div>
 </div>
+
+<!-- ========================================== -->
+<!-- PHẦN QUAN TRỌNG: EDIT SUBJECT MODAL (DƯỚI ĐÂY) -->
+<!-- ========================================== -->
+<div id="editModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <!-- Overlay mờ -->
+        <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" onclick="closeEditModal()"></div>
+        
+        <!-- Nội dung Popup -->
+        <div class="relative bg-white rounded-[2.5rem] shadow-xl max-w-lg w-full p-8 md:p-10 transform transition-all">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Edit Subject</h2>
+            <p class="text-gray-400 mb-8 text-sm">Cập nhật thông tin nhanh cho môn học của bạn.</p>
+            
+            <form id="editSubjectForm">
+                {% csrf_token %}
+                <input type="hidden" id="edit_subject_id">
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Subject Name</label>
+                        <input type="text" id="edit_name" name="name" class="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-blue-500 outline-none" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Identify Color</label>
+                        <input type="color" id="edit_color" name="color" class="w-full h-14 p-1 rounded-2xl border-none cursor-pointer">
+                    </div>
+                    <div class="flex gap-4 pt-4">
+                        <button type="submit" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition active:scale-95">
+                            Save Changes
+                        </button>
+                        <button type="button" onclick="closeEditModal()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold hover:bg-slate-200 transition">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmDeleteSubject(id, name) {
+    Swal.fire({
+        title: 'Bạn có chắc chắn?',
+        text: `Môn học "${name}" sẽ bị xóa. Lịch sử học tập liên quan sẽ được chuyển về trạng thái "Chưa xác định".`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Đúng, xóa nó!',
+        cancelButtonText: 'Hủy'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById(`delete-form-${id}`).submit();
+        }
+    })
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('editModal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
+
+async function openEditModal(id) {
+    const modal = document.getElementById('editModal');
+    try {
+        const response = await fetch(`/api/subjects/${id}/`);
+        if (!response.ok) throw new Error("API Error");
+        const data = await response.json();
+        
+        // Điền dữ liệu vào Modal
+        document.getElementById('edit_subject_id').value = data.id;
+        document.getElementById('edit_name').value = data.name;
+        document.getElementById('edit_color').value = data.color;
+        
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; 
+    } catch (error) {
+        Swal.fire('Lỗi', 'Không thể tải dữ liệu môn học. Vui lòng kiểm tra lại server.', 'error');
+    }
+}
+
+document.getElementById('editSubjectForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit_subject_id').value;
+    const formData = new FormData(this);
+
+    try {
+        const response = await fetch(`/api/subjects/${id}/update/`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') }
+        });
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            const card = document.querySelector(`[data-subject-id="${id}"]`);
+            if (card) {
+                card.querySelector('.subject-name').innerText = result.name;
+                card.querySelector('.subject-icon-box').style.backgroundColor = result.color;
+            }
+            closeEditModal();
+            Swal.fire({ icon: 'success', title: 'Đã cập nhật!', timer: 1500, showConfirmButton: false });
+        }
+    } catch (error) {
+        Swal.fire('Lỗi', 'Có lỗi xảy ra khi lưu dữ liệu.', 'error');
+    }
+});
+</script>
 {% endblock %}
