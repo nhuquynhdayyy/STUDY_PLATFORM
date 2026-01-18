@@ -77,19 +77,32 @@ class StatisticsView(LoginRequiredMixin, TemplateView):
 
 class StudyStatsAPI(LoginRequiredMixin, View):
     def get(self, request):
+        from django.db.models import Sum, Q, F, Value
         from django.db.models.functions import Coalesce
-        from django.db.models import F, Sum, Q, Value
 
-        # 1. Lấy tham số lọc từ URL
+        # 1. Lấy tham số (Thêm tham số 'type')
+        stat_type = request.GET.get('type', 'subject')  # 'subject' hoặc 'group'
         preset = request.GET.get('preset', '1week')
         start_date_str = request.GET.get('start_date')
         end_date_str = request.GET.get('end_date')
 
-        # 2. Xây dựng bộ lọc cơ bản
+        # 2. Bộ lọc cơ bản
         now = timezone.now()
         query_filter = Q(user=request.user, status='completed')
 
-        # 3. Logic lọc thời gian (Phục hồi chức năng đã mất)
+        # 3. Phân tách logic gom nhóm theo yêu cầu
+        if stat_type == 'group':
+            query_filter &= Q(session_type='group')
+            group_field = 'group_room__name'
+            color_field = Value('#1e293b') # Màu slate-800 đặc trưng cho Group
+            label_title = "Phòng học"
+        else:
+            query_filter &= Q(session_type='solo')
+            group_field = 'subject__name'
+            color_field = 'subject__color'
+            label_title = "Môn học"
+
+        # 4. Lọc thời gian (Giữ nguyên logic cũ)
         if preset == '1day':
             query_filter &= Q(end_time__gte=now - timedelta(days=1))
         elif preset == '1week':
@@ -99,52 +112,45 @@ class StudyStatsAPI(LoginRequiredMixin, View):
         elif preset == 'custom' and start_date_str and end_date_str:
             query_filter &= Q(end_time__date__range=[start_date_str, end_date_str])
 
-        # 4. Aggregation: Lấy tên (Môn học hoặc Phòng) và Màu sắc
+        # 5. Query Aggregation
         stats = StudySession.objects.filter(query_filter) \
-            .annotate(
-                display_name=Coalesce(F('subject__name'), F('group_room__name')),
-                display_color=Coalesce(F('subject__color'), Value('#1e293b')) # Mặc định màu tối cho Group
-            ) \
-            .values('display_name', 'display_color') \
+            .values(display_name=F(group_field), display_color=Coalesce(color_field, Value('#3b82f6'))) \
             .annotate(total_sec=Sum('duration')) \
             .order_by('-total_sec')
 
-        # 5. Định dạng dữ liệu cho Frontend (Chart.js)
+        # 6. Định dạng dữ liệu trả về cho Chart.js và Table
         labels = []
         data_points = []
         colors = []
         table_data = []
 
         for item in stats:
-            name = item['display_name'] or "Unknown"
+            name = item['display_name'] or "Chưa đặt tên"
             total_sec = item['total_sec'] or 0
             
-            # Tính toán đơn vị (Phút/Giờ)
-            minutes = round(total_sec / 60, 2)
-            hours = round(total_sec / 3600, 2)
+            # Quy đổi thời gian
+            h = int(total_sec // 3600)
+            m = int((total_sec % 3600) // 60)
+            s = int(total_sec % 60)
             
             labels.append(name)
-            # Dùng phút nếu thời gian học ít để biểu đồ không bị lùn
-            chart_val = minutes if hours < 1 else hours
-            data_points.append(chart_val)
+            data_points.append(round(total_sec / 60, 1)) # Vẽ biểu đồ theo đơn vị Phút
             colors.append(item['display_color'])
             
             table_data.append({
-                'subject': name,
-                'display_time': f"{int(total_sec//3600)}h {int((total_sec%3600)//60)}m {total_sec%60}s",
-                'minutes': minutes
+                'name': name,
+                'color': item['display_color'],
+                'display_time': f"{h}h {m}m {s}s",
             })
-
-        unit = "Hours" if max(data_points or [0]) > 60 else "Minutes"
 
         return JsonResponse({
             'labels': labels,
-            'unit': unit,
             'datasets': [{
                 'data': data_points,
                 'backgroundColor': colors,
             }],
-            'table': table_data
+            'table': table_data,
+            'type_label': label_title
         })
     
 class CreateSubjectView(LoginRequiredMixin, View):

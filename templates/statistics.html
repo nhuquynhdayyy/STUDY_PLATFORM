@@ -3,41 +3,54 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto">
-    <div class="flex justify-between items-end mb-10">
+    <!-- Header & Filter UI -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
         <div>
             <h1 class="text-3xl font-bold text-slate-800">Learning Analytics</h1>
             <p class="text-gray-400">Deep dive into your study habits.</p>
+            
+            <!-- THÊM: MODE SELECTOR (TAB) -->
+            <div class="flex bg-slate-200 p-1 rounded-xl mt-6 w-fit">
+                <button onclick="changeMode('subject')" id="tab-subject" class="mode-tab px-6 py-2 rounded-lg text-sm font-bold transition">
+                    Solo Subjects
+                </button>
+                <button onclick="changeMode('group')" id="tab-group" class="mode-tab px-6 py-2 rounded-lg text-sm font-bold transition">
+                    Group Rooms
+                </button>
+            </div>
         </div>
         
-        <!-- BỘ LỌC (FILTER UI) -->
+        <!-- Date Filters (Giữ nguyên) -->
         <div class="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
-            <button onclick="loadStats('1day')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1day">1 Day</button>
-            <button onclick="loadStats('1week')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1week">1 Week</button>
-            <button onclick="loadStats('1month')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1month">1 Month</button>
+            <button onclick="updateTimeRange('1day')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1day">1 Day</button>
+            <button onclick="updateTimeRange('1week')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1week">1 Week</button>
+            <button onclick="updateTimeRange('1month')" class="filter-btn px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50" id="btn-1month">1 Month</button>
             <div class="h-6 w-[1px] bg-gray-200"></div>
             <div class="flex items-center gap-2 px-2">
-                <input type="date" id="start_date" class="text-xs border-none bg-slate-50 rounded-lg p-1">
-                <span class="text-gray-300">to</span>
-                <input type="date" id="end_date" class="text-xs border-none bg-slate-50 rounded-lg p-1">
-                <button onclick="loadStats('custom')" class="bg-slate-900 text-white p-2 rounded-lg hover:bg-black"><i class="fas fa-search text-xs"></i></button>
+                <input type="date" id="start_date" class="text-xs border-none bg-slate-50 rounded-lg p-1 focus:ring-0">
+                <input type="date" id="end_date" class="text-xs border-none bg-slate-50 rounded-lg p-1 focus:ring-0">
+                <button onclick="updateTimeRange('custom')" class="bg-slate-900 text-white p-2 rounded-lg hover:bg-black"><i class="fas fa-search text-xs"></i></button>
             </div>
         </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- BIỂU ĐỒ (CHART) -->
-        <div class="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
-            <h3 class="font-bold text-slate-800 mb-6">Focus Hours by Subject</h3>
+        <!-- Chart Section -->
+        <div class="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 min-h-[500px]">
+            <h3 class="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <i class="fas fa-chart-bar text-blue-500"></i>
+                <span id="chart-title">Focus Time (Minutes)</span>
+            </h3>
             <div class="relative h-[400px]">
                 <canvas id="statsChart"></canvas>
             </div>
         </div>
 
-        <!-- BẢNG TỔNG HỢP (SUMMARY TABLE) -->
+        <!-- Detail Sidebar -->
         <div class="lg:col-span-1 bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
-            <h3 class="font-bold text-slate-800 mb-6">Details</h3>
-            <div class="space-y-6" id="stats-table-body">
-                <!-- Data will be injected here -->
+            <h3 class="font-bold text-slate-800 mb-6">Breakdown</h3>
+            <div class="space-y-4" id="stats-table-body">
+                <!-- Data injected here -->
             </div>
         </div>
     </div>
@@ -45,82 +58,97 @@
 
 <script>
 let myChart;
+let currentMode = 'subject'; // Mặc định
+let currentTimeRange = '1week'; // Mặc định
 
-// Thay thế hàm loadStats cũ trong statistics.html
-async function loadStats(preset) {
-    // 1. UI Feedback
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.classList.remove('bg-blue-600', 'text-white');
-        btn.classList.add('text-gray-500');
-    });
-    const activeBtn = document.getElementById('btn-' + preset);
-    if(activeBtn) {
-        activeBtn.classList.remove('text-gray-500');
-        activeBtn.classList.add('bg-blue-600', 'text-white');
-    }
+function changeMode(mode) {
+    currentMode = mode;
+    // Cập nhật UI Tab
+    document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('bg-white', 'text-blue-600', 'shadow-sm'));
+    document.getElementById(`tab-${mode}`).classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+    
+    loadStats();
+}
 
-    let url = `/api/stats/?preset=${preset}`;
-    if (preset === 'custom') {
-        url += `&start_date=${document.getElementById('start_date').value}&end_date=${document.getElementById('end_date').value}`;
+function updateTimeRange(range) {
+    currentTimeRange = range;
+    // Cập nhật UI Button
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-blue-600', 'text-white'));
+    const activeBtn = document.getElementById(`btn-${range}`);
+    if(activeBtn) activeBtn.classList.add('bg-blue-600', 'text-white');
+    
+    loadStats();
+}
+
+async function loadStats() {
+    let url = `/api/stats/?type=${currentMode}&preset=${currentTimeRange}`;
+    
+    if (currentTimeRange === 'custom') {
+        const start = document.getElementById('start_date').value;
+        const end = document.getElementById('end_date').value;
+        url += `&start_date=${start}&end_date=${end}`;
     }
 
     try {
         const response = await fetch(url);
-        const result = await response.json();
+        const data = await response.json();
 
-        // 2. Vẽ biểu đồ
+        // 1. Cập nhật Biểu đồ
         const ctx = document.getElementById('statsChart').getContext('2d');
         if (myChart) myChart.destroy();
         
         myChart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: result.labels,
+                labels: data.labels,
                 datasets: [{
-                    label: `Study Time (${result.unit})`,
-                    data: result.datasets[0].data,
-                    backgroundColor: result.datasets[0].backgroundColor,
-                    borderRadius: 10,
+                    label: 'Minutes Focused',
+                    data: data.datasets[0].data,
+                    backgroundColor: data.datasets[0].backgroundColor,
+                    borderRadius: 12,
+                    borderSkipped: false,
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
                 scales: {
-                    y: { 
-                        beginAtZero: true,
-                        title: { display: true, text: result.unit }
-                    }
+                    y: { grid: { display: false }, beginAtZero: true },
+                    x: { grid: { display: false } }
                 }
             }
         });
 
-        // 3. Hiển thị danh sách Details (giống cột bên phải mockup)
-        const tableBody = document.getElementById('stats-table-body');
-        if (result.table.length === 0) {
-            tableBody.innerHTML = `<div class="text-center py-20 text-gray-400 italic">No data found. Start studying!</div>`;
+        // 2. Cập nhật Bảng Details
+        const container = document.getElementById('stats-table-body');
+        if (data.table.length === 0) {
+            container.innerHTML = `<div class="text-center py-20 text-gray-400 italic">No history found for this category.</div>`;
         } else {
-            tableBody.innerHTML = result.table.map(row => `
-                <div class="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-blue-100 transition">
+            container.innerHTML = data.table.map(item => `
+                <div class="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-blue-200 transition">
                     <div class="flex items-center gap-3">
-                        <div class="w-2 h-8 rounded-full bg-blue-500"></div>
+                        <div class="w-1.5 h-10 rounded-full" style="background-color: ${item.color}"></div>
                         <div>
-                            <p class="font-bold text-slate-800">${row.subject}</p>
-                            <p class="text-[10px] text-gray-400 uppercase tracking-widest">Total Focused</p>
+                            <p class="font-bold text-slate-800 text-sm">${item.name}</p>
+                            <p class="text-[10px] text-gray-400 uppercase font-bold">${data.type_label}</p>
                         </div>
                     </div>
                     <div class="text-right">
-                        <p class="text-lg font-mono font-bold text-blue-600">${row.display_time}</p>
+                        <p class="text-md font-mono font-bold text-blue-600">${item.display_time}</p>
                     </div>
                 </div>
             `).join('');
         }
-    } catch (error) {
-        console.error("Lỗi tải thống kê:", error);
+    } catch (e) {
+        console.error("Fetch error:", e);
     }
 }
 
-// Tự động load 1 tuần khi vừa vào trang
-window.onload = () => loadStats('1week');
+// Khởi tạo lần đầu
+window.onload = () => {
+    changeMode('subject');
+    updateTimeRange('1week');
+};
 </script>
 {% endblock %}
