@@ -5,6 +5,14 @@
     <meta charset="UTF-8">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        /* Tùy chỉnh màu sắc SweetAlert2 để hợp với tone Slate/Blue của app */
+        .swal2-popup {
+            border-radius: 2rem !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+    </style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="bg-slate-50 font-sans flex min-h-screen">
@@ -36,12 +44,16 @@
                 <i class="fas fa-history"></i> History
             </a>
 
-            <form action="{% url 'logout' %}" method="post" class="mt-4">
+            <!-- 1. Đặt ID cho Form và ẩn nó đi (hoặc giữ nguyên nhưng đổi nút bấm) -->
+            <form id="logout-form" action="{% url 'logout' %}" method="post" class="hidden">
                 {% csrf_token %}
-                <button type="submit" class="w-full flex items-center gap-3 p-3 text-red-400 hover:bg-red-50 rounded-xl transition">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </button>
             </form>
+
+            <!-- 2. Nút bấm hiển thị cho người dùng -->
+            <button type="button" onclick="confirmLogout()" class="w-full flex items-center gap-3 p-3 text-red-400 hover:bg-red-50 rounded-xl transition mt-4">
+                <i class="fas fa-sign-out-alt"></i> 
+                <span class="font-bold">Logout</span>
+            </button>
         </nav>
 
         <!-- User Profile Bottom -->
@@ -61,5 +73,24 @@
         {% block content %}{% endblock %}
     </main>
 
+    <script>
+        function confirmLogout() {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "Bạn có chắc chắn muốn đăng xuất không?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444', // Màu đỏ
+                cancelButtonColor: '#64748b',  // Màu xám
+                confirmButtonText: 'Đăng xuất ngay',
+                cancelButtonText: 'Hủy'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Nếu bấm xác nhận, tìm form và submit
+                    document.getElementById('logout-form').submit();
+                }
+            })
+        }
+    </script>
 </body>
 </html>

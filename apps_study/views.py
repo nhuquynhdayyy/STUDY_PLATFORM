@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.contrib.auth import login
 from django.contrib.auth.views import LoginView, LogoutView
 from django.views.generic import CreateView
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from .forms import UserRegisterForm, SubjectForm
 from django.http import JsonResponse
 from datetime import timedelta
@@ -156,8 +156,11 @@ class CreateSubjectView(LoginRequiredMixin, View):
         return redirect('dashboard')
 
 def group_room_detail(request, room_code):
-    # Dùng select_related('host') để lấy thông tin chủ phòng nhanh nhất
-    room = get_object_or_404(GroupRoom.objects.select_related('host'), room_code=room_code)
+    room = GroupRoom.objects.filter(room_code=room_code).first()
+    if not room:
+        from django.contrib import messages
+        messages.error(request, "Phòng học không tồn tại!")
+        return redirect('dashboard')
     return render(request, 'group_room.html', {'room': room})
 
 class RegisterView(CreateView):
@@ -226,8 +229,24 @@ class GroupListView(LoginRequiredMixin, View):
     
 class JoinGroupRoomView(View):
     def post(self, request):
-        room_code = request.POST.get('room_code')
-        return redirect('group_room_detail', room_code=room_code)
+        room_code = request.POST.get('room_code', '').strip()
+        
+        # 1. Kiểm tra phòng có tồn tại không
+        room = GroupRoom.objects.filter(room_code=room_code, is_active=True).first()
+        
+        if not room:
+            # Trả về lỗi JSON thay vì văng trang 404
+            return JsonResponse({
+                'success': False, 
+                'message': f'Mã phòng "{room_code}" không tồn tại hoặc đã bị đóng!'
+            }, status=404)
+        
+        # 2. Nếu tồn tại, trả về URL để Frontend tự chuyển hướng
+        return JsonResponse({
+            'success': True,
+            'redirect_url': reverse('group_room_detail', args=[room_code])
+        })
+
     
 class LeaveRoomView(LoginRequiredMixin, View):
     def post(self, request, room_code):
