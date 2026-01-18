@@ -20,13 +20,23 @@
         <tbody class="divide-y divide-gray-100">
             {% for record in history %}
             <tr class="hover:bg-slate-50 transition">
-                <td class="px-8 py-5 font-bold text-gray-800">{{ record.subject.name }}</td>
+                <td class="px-8 py-5 font-bold text-gray-800">
+                    <div class="flex items-center gap-2">
+                        <div class="w-1.5 h-1.5 rounded-full" style="background-color: {{ record.get_color }}"></div>
+                        {{ record.display_name }}
+                    </div>
+                </td>
+                
                 <td class="px-8 py-5 text-gray-500">{{ record.end_time|date:"l, d M Y" }}</td>
                 <td class="px-8 py-5 text-gray-400 italic text-sm">{{ record.start_time|date:"H:i" }} to {{ record.end_time|date:"H:i" }}</td>
+                
                 <td class="px-8 py-5 text-right font-mono font-bold text-teal-600" id="dur-history-{{ record.id }}">
                     <script>
                         var s = {{ record.duration }};
-                        document.write(Math.floor(s/3600) + "h " + Math.floor((s%3600)/60) + "m " + (s%60) + "s");
+                        var h = Math.floor(s/3600);
+                        var m = Math.floor((s%3600)/60);
+                        var sec = s % 60;
+                        document.write(h + "h " + m + "m " + sec + "s");
                     </script>
                 </td>
             </tr>

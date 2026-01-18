@@ -1,0 +1,32 @@
+// templates/room.html
+const roomCode = "{{ room.room_code }}";
+const socket = new WebSocket(`ws://${window.location.host}/ws/study/${roomCode}/`);
+const peerConnections = {};
+const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+socket.onmessage = async (event) => {
+    const data = JSON.parse(event.data);
+    
+    // Xử lý signaling WebRTC
+    if (data.type === 'offer') {
+        const pc = createPeerConnection(data.from);
+        await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.send(json({ type: 'answer', answer: answer, to: data.from }));
+    } 
+    // ... xử lý answer và ice-candidate tương tự
+};
+
+function createPeerConnection(remoteUser) {
+    const pc = new RTCPeerConnection(config);
+    pc.onicecandidate = (e) => {
+        if (e.candidate) socket.send(json({ type: 'ice', candidate: e.candidate }));
+    };
+    pc.ontrack = (e) => {
+        document.getElementById('remote-video').srcObject = e.streams[0];
+    };
+    // Add local stream
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    return pc;
+}

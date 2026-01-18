@@ -1,94 +1,97 @@
 <!-- templates/group_room.html -->
 {% extends 'base.html' %}
 {% block content %}
-<div class="bg-slate-900 min-h-screen -m-8 text-white flex">
-    <!-- Main Stream -->
-    <div class="flex-1 p-8 flex flex-col">
-        <div class="flex justify-between items-center mb-6">
-            <div class="flex items-center gap-4">
-                <a href="{% url 'dashboard' %}" class="p-2 hover:bg-slate-800 rounded-full"><i class="fas fa-arrow-left"></i></a>
-                <div>
-                    <h2 class="text-xl font-bold">Python Basics: Deep Work</h2>
-                    <p class="text-xs text-green-400"><i class="fas fa-circle text-[8px]"></i> Live Session</p>
-                </div>
-            </div>
-            <div class="flex items-center gap-4">
-                <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 flex items-center gap-3">
-                    <span class="text-gray-400 text-xs uppercase tracking-widest">Room Code:</span>
-                    <span class="font-mono font-bold">#8X92-LZ</span>
-                    <i class="far fa-copy cursor-pointer"></i>
-                </div>
-                <button class="px-4 py-2 bg-red-900/30 text-red-500 border border-red-900/50 rounded-lg hover:bg-red-500 hover:text-white transition">
-                   <i class="fas fa-power-off"></i> End Session
-                </button>
-            </div>
-        </div>
-
-        <!-- Video Placeholder -->
-        <div class="flex-1 bg-slate-950 rounded-3xl border border-slate-800 flex flex-col items-center justify-center relative">
-            <div class="bg-slate-800 p-8 rounded-full mb-6">
-                <i class="fas fa-video-slash text-5xl text-gray-600"></i>
-            </div>
-            <h3 class="text-2xl font-bold mb-2">Video Stream Offline</h3>
-            <p class="text-gray-500 text-center max-w-md mb-8">
-                Video conferencing is currently under construction. Please use the sidebar to track participant progress and coordinate via chat.
-            </p>
-            <div class="flex gap-4">
-                <button class="px-6 py-3 bg-teal-600 text-white rounded-xl font-bold flex items-center gap-2">
-                    <i class="fas fa-rocket"></i> Start Focus Timer
-                </button>
-                <button class="px-6 py-3 bg-slate-800 text-white rounded-xl font-bold border border-slate-700">
-                    Audio Settings
-                </button>
-            </div>
-            <div class="absolute bottom-6 left-6 text-[10px] text-gray-600 font-mono">
-                SERVER: US-EAST-1 | LATENCY: 42ms
-            </div>
-        </div>
+<div class="bg-slate-900 min-h-screen text-white p-8">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold">{{ room.name }} <span class="text-sm font-mono text-gray-500">#{{ room.room_code }}</span></h2>
+        <a href="{% url 'dashboard' %}" class="bg-red-600 px-6 py-2 rounded-xl font-bold">Leave Room</a>
     </div>
 
-    <!-- Right Sidebar (Participants) -->
-    <aside class="w-80 bg-slate-900 border-l border-slate-800 p-6 flex flex-col">
-        <h4 class="font-bold mb-2">Participants</h4>
-        <p class="text-xs text-gray-500 mb-6">4 of 10 seats occupied</p>
-
-        <div class="flex bg-slate-950 p-1 rounded-xl mb-6">
-            <button class="flex-1 py-2 text-xs font-bold bg-slate-800 rounded-lg">Focus Status</button>
-            <button class="flex-1 py-2 text-xs font-bold text-gray-500">Group Chat</button>
+    <!-- Video Grid -->
+    <div id="video-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Video của chính mình -->
+        <div class="relative bg-black rounded-3xl overflow-hidden aspect-video border-2 border-blue-500">
+            <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
+            <div class="absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded-lg text-xs">You (Host)</div>
         </div>
-
-        <div class="space-y-4 flex-1">
-            <!-- Host -->
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-blue-500/30">
-                <div class="flex items-center gap-3">
-                    <img src="https://ui-avatars.com/api/?name=You" class="w-10 h-10 rounded-full border-2 border-green-500">
-                    <div>
-                        <p class="text-sm font-bold">You (Host) <i class="fas fa-star text-xs text-yellow-500"></i></p>
-                        <p class="text-[10px] text-blue-400">Focusing • Python</p>
-                    </div>
-                </div>
-                <p class="text-2xl font-mono font-bold text-blue-400 mt-3 text-center tracking-widest">00:45:12 <span class="text-[10px] uppercase opacity-50">Elapsed</span></p>
-            </div>
-
-            <!-- Peers -->
-            <div class="text-[10px] text-gray-600 uppercase tracking-widest mb-2 mt-6">Peers</div>
-            <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col gap-3">
-                <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-2">
-                        <img src="https://i.pravatar.cc/150?u=1" class="w-8 h-8 rounded-full">
-                        <p class="text-sm font-bold">Sarah J.</p>
-                    </div>
-                    <span class="text-[10px] text-gray-500">00:42:10</span>
-                </div>
-                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                    <div class="bg-teal-500 h-1 rounded-full" style="width: 80%"></div>
-                </div>
-            </div>
-        </div>
-
-        <button class="w-full py-4 bg-slate-800 border border-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-700 transition mt-4">
-            <i class="fas fa-share-nodes"></i> Invite Others
-        </button>
-    </aside>
+    </div>
 </div>
+
+<script>
+const roomCode = "{{ room.room_code }}";
+const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+const socket = new WebSocket(`${wsScheme}://${window.location.host}/ws/study/${roomCode}/`);
+
+const videoGrid = document.getElementById('video-grid');
+const localVideo = document.getElementById('localVideo');
+let localStream;
+const peers = {}; // Lưu trữ RTCPeerConnection của các thành viên khác
+
+// 1. Lấy Camera/Mic
+navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+    localStream = stream;
+    localVideo.srcObject = stream;
+});
+
+socket.onmessage = async (event) => {
+    const data = JSON.parse(event.data);
+
+    // Có người mới vào -> Gửi Offer cho họ
+    if (data.type === "new_peer") {
+        initPeerConnection(data.channel_name, data.username, true);
+    } 
+    
+    // Xử lý Signaling
+    const { payload, sender_channel, sender_name } = data;
+    if (!payload) return;
+
+    if (payload.type === "offer") {
+        const pc = initPeerConnection(sender_channel, sender_name, false);
+        await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.send(json({ type: "answer", answer: answer, target: sender_channel }));
+
+    } else if (payload.type === "answer") {
+        await peers[sender_channel].setRemoteDescription(new RTCSessionDescription(payload.answer));
+
+    } else if (payload.type === "ice") {
+        await peers[sender_channel].addIceCandidate(new RTCIceCandidate(payload.candidate));
+    }
+};
+
+function initPeerConnection(targetChannel, username, isOffer) {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    peers[targetChannel] = pc;
+
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+    pc.onicecandidate = e => {
+        if (e.candidate) socket.send(json({ type: "ice", candidate: e.candidate, target: targetChannel }));
+    };
+
+    pc.ontrack = e => {
+        if (document.getElementById(`video-${targetChannel}`)) return;
+        const container = document.createElement('div');
+        container.id = `video-${targetChannel}`;
+        container.className = "relative bg-black rounded-3xl overflow-hidden aspect-video border border-slate-700";
+        const video = document.createElement('video');
+        video.srcObject = e.streams[0];
+        video.autoplay = true;
+        video.className = "w-full h-full object-cover";
+        container.appendChild(video);
+        videoGrid.appendChild(container);
+    };
+
+    if (isOffer) {
+        pc.createOffer().then(offer => {
+            pc.setLocalDescription(offer);
+            socket.send(json({ type: "offer", offer: offer, target: targetChannel }));
+        });
+    }
+    return pc;
+}
+
+function json(obj) { return JSON.stringify(obj); }
+</script>
 {% endblock %}

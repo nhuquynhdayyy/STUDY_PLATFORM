@@ -31,14 +31,25 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'apps_study',
 ]
+
+ASGI_APPLICATION = 'core.asgi.application'
+
+# Dùng InMemory cho môi trường Dev (hoặc Redis cho Production)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    },
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

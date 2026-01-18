@@ -25,7 +25,39 @@
         </form>
     </div>
     {% endif %}
-</div>
+</div> 
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <!-- Cột trái: Tạo phòng nhanh -->
+        <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-8 rounded-[2.5rem] text-white shadow-xl">
+            <h3 class="text-xl font-bold mb-2">Start Group Study</h3>
+            <p class="text-slate-400 text-sm mb-6">Create a room and invite your friends to study together with video call.</p>
+            
+            <form action="{% url 'create_group_room' %}" method="POST" class="flex gap-2">
+                {% csrf_token %}
+                <input type="text" name="room_name" placeholder="Room Name (e.g. Python Team)" required
+                    class="flex-1 bg-slate-700 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-xl font-bold transition">
+                    Create Room
+                </button>
+            </form>
+        </div>
+
+        <!-- Cột phải: Tham gia bằng mã -->
+        <div class="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+            <h3 class="text-xl font-bold text-slate-800 mb-2">Join with Code</h3>
+            <p class="text-gray-400 text-sm mb-6">Enter a room code sent by your friend to join their session.</p>
+            
+            <form action="{% url 'join_group_room' %}" method="POST" class="flex gap-2">
+                {% csrf_token %}
+                <input type="text" name="room_code" placeholder="Example: AB82-C9" required
+                    class="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+                <button type="submit" class="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-xl font-bold transition">
+                    Join Now
+                </button>
+            </form>
+        </div>
+    </div>
 
 <!-- My Subjects -->
 <h2 class="text-xl font-bold mb-6 text-slate-800">My Subjects</h2>
@@ -62,27 +94,52 @@
 <div class="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
     <table class="w-full text-left border-collapse">
         <thead>
+            <!-- SỬA TẠI ĐÂY: Thêm 1 cột tiêu đề để đủ 4 cột -->
             <tr class="bg-gray-50 border-b border-gray-100 text-gray-400 text-[10px] uppercase tracking-widest">
                 <th class="px-8 py-4 font-semibold">Subject</th>
                 <th class="px-8 py-4 font-semibold">Date</th>
+                <th class="px-8 py-4 font-semibold">Type</th> <!-- Thêm cột này -->
                 <th class="px-8 py-4 font-semibold text-right">Duration</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
             {% for record in recent_history %}
             <tr class="hover:bg-blue-50/30 transition">
-                <td class="px-8 py-4 font-bold text-slate-700">{{ record.subject.name }}</td>
-                <td class="px-8 py-4 text-gray-400 text-sm">{{ record.end_time|date:"M d, Y" }}</td>
+                <!-- Cột 1: Subject -->
+                <td class="px-8 py-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full" style="background-color: {{ record.get_color }}"></div>
+                        <span class="font-bold text-gray-700">{{ record.display_name }}</span>
+                    </div>
+                </td>
+
+                <!-- Cột 2: Date -->
+                <td class="px-8 py-4 text-gray-400 text-sm">
+                    {{ record.end_time|date:"M d, Y" }}
+                </td>
+                
+                <!-- Cột 3: Type (Badge) -->
+                <td class="px-8 py-4">
+                    {% if record.session_type == 'group' %}
+                        <span class="text-[9px] bg-slate-100 text-slate-500 px-2 py-1 rounded font-bold uppercase">Group</span>
+                    {% else %}
+                        <span class="text-[9px] bg-blue-50 text-blue-500 px-2 py-1 rounded font-bold uppercase">Solo</span>
+                    {% endif %}
+                </td>
+
+                <!-- Cột 4: Duration -->
                 <td class="px-8 py-4 text-right font-mono font-bold text-blue-600">
-                    <span id="dur-dashboard-{{ record.id }}">{{ record.duration }}s</span>
+                    <span id="dur-{{ record.id }}">{{ record.duration }}s</span>
                     <script>
-                        var s = {{ record.duration }};
-                        document.getElementById("dur-dashboard-{{ record.id }}").innerText = Math.floor(s/60) + "m " + (s%60) + "s";
+                        (function() {
+                            var s = {{ record.duration }};
+                            var m = Math.floor(s/60);
+                            var sec = s % 60;
+                            document.getElementById("dur-{{ record.id }}").innerText = m + "m " + sec + "s";
+                        })();
                     </script>
                 </td>
             </tr>
-            {% empty %}
-            <tr><td colspan="3" class="px-8 py-10 text-center text-gray-400 italic">No activity yet.</td></tr>
             {% endfor %}
         </tbody>
     </table>
