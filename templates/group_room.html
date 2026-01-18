@@ -36,7 +36,38 @@ const videoGrid = document.getElementById('video-grid');
 const localVideo = document.getElementById('localVideo');
 let localStream;
 const peers = {}; 
-const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const config = { 
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        {
+            urls: "stun:stun.relay.metered.ca:80",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:80",
+            username: "c010612226f6997fbc8ceaea",
+            credential: "ZxcEK7Tmux3dTW9y",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+            username: "c010612226f6997fbc8ceaea",
+            credential: "ZxcEK7Tmux3dTW9y",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:443",
+            username: "c010612226f6997fbc8ceaea",
+            credential: "ZxcEK7Tmux3dTW9y",
+        },
+        {
+            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+            username: "c010612226f6997fbc8ceaea",
+            credential: "ZxcEK7Tmux3dTW9y",
+        },
+    ] 
+};
 
 navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
     localStream = stream;
@@ -69,9 +100,24 @@ function initPeerConnection(targetChannel, username, isOffer) {
     const pc = new RTCPeerConnection(config);
     peers[targetChannel] = pc;
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    
+    // THÊM ĐOẠN NÀY ĐỂ THEO DÕI:
+    pc.onconnectionstatechange = e => {
+        console.log(`Trạng thái kết nối với ${username}: ${pc.connectionState}`);
+        if (pc.connectionState === 'failed') {
+            Swal.fire('Lỗi kết nối', 'Không thể thiết lập đường truyền video do tường lửa (NAT). Cần dùng TURN Server.', 'error');
+        }
+    };
 
     pc.onicecandidate = e => {
-        if (e.candidate) socket.send(JSON.stringify({ type: "ice", candidate: e.candidate, target: targetChannel }));
+        if (e.candidate) {
+            console.log("Gửi candidate mới tới đối phương...");
+            socket.send(JSON.stringify({ 
+                type: "ice", 
+                candidate: e.candidate, 
+                target: targetChannel 
+            }));
+        }
     };
 
     pc.ontrack = e => {
