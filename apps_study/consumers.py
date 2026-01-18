@@ -86,6 +86,8 @@ class StudyConsumer(AsyncWebsocketConsumer):
             user=self.user,
             session_type='group',
             group_room=room,
+            name_snapshot=room.name,      # LƯU TÊN PHÒNG LẠI
+            color_snapshot="#1e293b",     # MÀU MẶC ĐỊNH CỦA GROUP
             status='active'
         )
         return session.id

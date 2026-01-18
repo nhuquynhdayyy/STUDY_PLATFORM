@@ -42,12 +42,21 @@ class StudySession(models.Model):
     duration = models.IntegerField(default=0) # Tính theo giây
     status = models.CharField(max_length=10, default='active') # active/completed
 
+    name_snapshot = models.CharField(max_length=255, null=True, blank=True)
+    color_snapshot = models.CharField(max_length=7, null=True, blank=True)
+
     class Meta:
         ordering = ['-start_time']
 
     @property
     def display_name(self):
-        """Trả về tên môn học nếu học solo, hoặc tên phòng nếu học nhóm"""
+        # Ưu tiên lấy từ snapshot nếu có (để giữ tên khi subject/room bị xóa)
+        if self.name_snapshot:
+            if self.session_type == 'group':
+                return f"[Group] {self.name_snapshot}"
+            return self.name_snapshot
+        
+        # Fallback cho dữ liệu cũ chưa có snapshot
         if self.session_type == 'solo' and self.subject:
             return self.subject.name
         if self.session_type == 'group' and self.group_room:
@@ -56,10 +65,14 @@ class StudySession(models.Model):
 
     @property
     def get_color(self):
-        """Trả về màu của môn học hoặc màu mặc định cho phòng họp nhóm"""
+        # Ưu tiên lấy màu từ snapshot
+        if self.color_snapshot:
+            return self.color_snapshot
+        
+        # Fallback
         if self.session_type == 'solo' and self.subject:
             return self.subject.color
-        return "#1e293b" # Màu slate-800 cho Group
+        return "#1e293b" # Màu mặc định cho Group
 
 class RoomMember(models.Model):
     room = models.ForeignKey(GroupRoom, on_delete=models.CASCADE, related_name='members')

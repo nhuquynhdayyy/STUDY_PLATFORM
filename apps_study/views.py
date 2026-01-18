@@ -71,10 +71,13 @@ class StartStudyAction(LoginRequiredMixin, View):
         subject = Subject.objects.get(id=subject_id, user=request.user)
         
         with transaction.atomic():
-            # Kiểm tra tránh tạo trùng (Race condition)
             if not StudySession.objects.filter(user=request.user, status='active').exists():
-                StudySession.objects.create(user=request.user, subject=subject)
-        
+                StudySession.objects.create(
+                    user=request.user, 
+                    subject=subject,
+                    name_snapshot=subject.name,  # LƯU TÊN LẠI
+                    color_snapshot=subject.color # LƯU MÀU LẠI
+                )
         return redirect('dashboard')
 
 class StopStudyAction(LoginRequiredMixin, View):
