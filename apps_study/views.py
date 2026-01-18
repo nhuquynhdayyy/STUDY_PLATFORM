@@ -75,77 +75,77 @@ class StopStudyAction(LoginRequiredMixin, View):
 class StatisticsView(LoginRequiredMixin, TemplateView):
     template_name = 'statistics.html'
 
-# class StudyStatsAPI(LoginRequiredMixin, View):
-#     def get(self, request):
-#         preset = request.GET.get('preset', '1week')
-#         start_date_str = request.GET.get('start_date')
-#         end_date_str = request.GET.get('end_date')
-
-#         now = timezone.now()
-#         # Đảm bảo dùng đúng filter như trang History
-#         query_filter = models.Q(user=request.user, status='completed')
-
-#         # Xử lý filter thời gian
-#         if preset == '1day':
-#             query_filter &= models.Q(end_time__gte=now - timedelta(days=1))
-#         elif preset == '1week':
-#             query_filter &= models.Q(end_time__gte=now - timedelta(days=7))
-#         elif preset == '1month':
-#             query_filter &= models.Q(end_time__gte=now - timedelta(days=30))
-#         elif preset == 'custom' and start_date_str and end_date_str:
-#             query_filter &= models.Q(end_time__date__range=[start_date_str, end_date_str])
-
-#         # Aggregation
-#         stats = StudySession.objects.filter(query_filter) \
-#             .values('subject__name', 'subject__color') \
-#             .annotate(total_sec=Sum('duration')) \
-#             .order_by('-total_sec')
-
-#         labels = []
-#         chart_data = []
-#         colors = []
-#         table_data = []
-
-#         for item in stats:
-#             name = item['subject__name']
-#             total_sec = item['total_sec'] or 0
-            
-#             # Tính toán hiển thị
-#             minutes = round(total_sec / 60, 2)
-#             hours = round(total_sec / 3600, 2)
-            
-#             labels.append(name)
-#             # Nếu tổng thời gian quá ngắn, dùng Phút để vẽ biểu đồ cho rõ
-#             chart_data.append(minutes if hours < 1 else hours)
-#             colors.append(item['subject__color'] or "#3b82f6")
-            
-#             table_data.append({
-#                 'subject': name,
-#                 'display_time': f"{int(total_sec//60)}m {total_sec%60}s",
-#                 'raw_minutes': minutes
-#             })
-
-#         return JsonResponse({
-#             'labels': labels,
-#             'unit': 'Minutes' if max(chart_data or [0]) < 60 else 'Hours',
-#             'datasets': [{'data': chart_data, 'backgroundColor': colors}],
-#             'table': table_data
-#         })
-
 class StudyStatsAPI(LoginRequiredMixin, View):
     def get(self, request):
-        # Thống kê tổng hợp: Môn học (Solo) + Tên phòng (Group)
-        # Chúng ta dùng Coalesce để lấy tên môn học, nếu không có thì lấy tên phòng
         from django.db.models.functions import Coalesce
-        from django.db.models import F
-        
-        stats = StudySession.objects.filter(user=request.user, status='completed') \
-            .annotate(display_name=Coalesce(F('subject__name'), F('group_room__name'))) \
-            .values('display_name') \
-            .annotate(total_sec=Sum('duration'))
-        
-        # Kết quả trả về gồm cả học một mình và học nhóm
-        return JsonResponse(list(stats), safe=False)
+        from django.db.models import F, Sum, Q, Value
+
+        # 1. Lấy tham số lọc từ URL
+        preset = request.GET.get('preset', '1week')
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+
+        # 2. Xây dựng bộ lọc cơ bản
+        now = timezone.now()
+        query_filter = Q(user=request.user, status='completed')
+
+        # 3. Logic lọc thời gian (Phục hồi chức năng đã mất)
+        if preset == '1day':
+            query_filter &= Q(end_time__gte=now - timedelta(days=1))
+        elif preset == '1week':
+            query_filter &= Q(end_time__gte=now - timedelta(days=7))
+        elif preset == '1month':
+            query_filter &= Q(end_time__gte=now - timedelta(days=30))
+        elif preset == 'custom' and start_date_str and end_date_str:
+            query_filter &= Q(end_time__date__range=[start_date_str, end_date_str])
+
+        # 4. Aggregation: Lấy tên (Môn học hoặc Phòng) và Màu sắc
+        stats = StudySession.objects.filter(query_filter) \
+            .annotate(
+                display_name=Coalesce(F('subject__name'), F('group_room__name')),
+                display_color=Coalesce(F('subject__color'), Value('#1e293b')) # Mặc định màu tối cho Group
+            ) \
+            .values('display_name', 'display_color') \
+            .annotate(total_sec=Sum('duration')) \
+            .order_by('-total_sec')
+
+        # 5. Định dạng dữ liệu cho Frontend (Chart.js)
+        labels = []
+        data_points = []
+        colors = []
+        table_data = []
+
+        for item in stats:
+            name = item['display_name'] or "Unknown"
+            total_sec = item['total_sec'] or 0
+            
+            # Tính toán đơn vị (Phút/Giờ)
+            minutes = round(total_sec / 60, 2)
+            hours = round(total_sec / 3600, 2)
+            
+            labels.append(name)
+            # Dùng phút nếu thời gian học ít để biểu đồ không bị lùn
+            chart_val = minutes if hours < 1 else hours
+            data_points.append(chart_val)
+            colors.append(item['display_color'])
+            
+            table_data.append({
+                'subject': name,
+                'display_time': f"{int(total_sec//3600)}h {int((total_sec%3600)//60)}m {total_sec%60}s",
+                'minutes': minutes
+            })
+
+        unit = "Hours" if max(data_points or [0]) > 60 else "Minutes"
+
+        return JsonResponse({
+            'labels': labels,
+            'unit': unit,
+            'datasets': [{
+                'data': data_points,
+                'backgroundColor': colors,
+            }],
+            'table': table_data
+        })
     
 class CreateSubjectView(LoginRequiredMixin, View):
     def post(self, request):
