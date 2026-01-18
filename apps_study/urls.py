@@ -1,6 +1,6 @@
 from django.urls import path
 from django.contrib.auth.views import LoginView, LogoutView
-from .views import DashboardView, StartStudyAction, StatisticsView, StopStudyAction, CreateSubjectView, HistoryListView, RegisterView, StudyStatsAPI, SubjectListView, SubjectCreateView, GroupListView, CreateRoomView, group_room_detail, JoinGroupRoomView, LeaveRoomView, SubjectUpdateView, SubjectDeleteView, subject_detail_api, subject_update_api
+from .views import DashboardView, StartStudyAction, StatisticsView, StopStudyAction, CreateSubjectView, HistoryListView, RegisterView, StudyStatsAPI, SubjectListView, SubjectCreateView, GroupListView, CreateRoomView, group_room_detail, JoinGroupRoomView, LeaveRoomView, SubjectUpdateView, SubjectDeleteView, subject_detail_api, subject_update_api, group_detail_api, group_update_api, GroupDeleteView
 from django.views import View
 
 urlpatterns = [
@@ -28,4 +28,7 @@ urlpatterns = [
     path('subjects/<int:pk>/delete/', SubjectDeleteView.as_view(), name='subject_delete'),
     path('api/subjects/<int:pk>/', subject_detail_api, name='api_subject_detail'),
     path('api/subjects/<int:pk>/update/', subject_update_api, name='api_subject_update'),
+    path('api/groups/<str:room_code>/', group_detail_api, name='api_group_detail'),
+    path('api/groups/<str:room_code>/update/', group_update_api, name='api_group_update'),
+    path('groups/<str:room_code>/delete/', GroupDeleteView.as_view(), name='group_delete'),
 ]

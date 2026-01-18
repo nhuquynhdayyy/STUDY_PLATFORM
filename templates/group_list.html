@@ -12,23 +12,132 @@
         <div class="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col justify-between">
             <div>
                 <div class="flex justify-between items-start mb-4">
-                    <div class="bg-green-50 text-green-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Live Now</div>
+                    {% if room.online_count > 0 %}
+                        <!-- CHỈ HIỆN LIVE NOW KHI CÓ NGƯỜI ONLINE THẬT SỰ -->
+                        <div class="flex items-center gap-2">
+                            <div class="bg-green-50 text-green-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-1">
+                                <span class="relative flex h-2 w-2">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                </span>
+                                Live Now
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-400">{{ room.online_count }} online</span>
+                        </div>
+                    {% else %}
+                        <!-- HIỆN TRẠNG THÁI TRỐNG NẾU KHÔNG CÓ AI -->
+                        <div class="bg-slate-100 text-slate-400 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                            Idle
+                        </div>
+                    {% endif %}
+                    
                     <span class="text-xs text-gray-300 font-mono">#{{ room.room_code }}</span>
                 </div>
+                
                 <h3 class="text-xl font-bold text-slate-800 mb-1">{{ room.name }}</h3>
                 <p class="text-gray-400 text-xs mb-6">Host: {{ room.host.username }}</p>
+                <!-- Chèn vào bên dưới tên Host trong group_list.html -->
+                <div class="flex items-center gap-2 mt-2">
+                    {% if room.host == user %}
+                        <button onclick="openEditGroupModal('{{ room.room_code }}')" class="text-[10px] font-bold text-blue-500 hover:underline">Edit</button>
+                        <span class="text-gray-300 text-[10px]">|</span>
+                        <button onclick="confirmDeleteGroup('{{ room.room_code }}', '{{ room.name }}')" class="text-[10px] font-bold text-red-400 hover:underline">Delete</button>
+                    {% endif %}
+                </div>
+
+                <!-- Form ẩn để xóa -->
+                <form id="delete-group-{{ room.room_code }}" action="{% url 'group_delete' room.room_code %}" method="POST" style="display:none;">
+                    {% csrf_token %}
+                </form>
             </div>
             
             <a href="{% url 'group_room_detail' room.room_code %}" 
-               class="w-full py-3 bg-blue-600 text-white rounded-xl text-center font-bold hover:bg-blue-700 transition">
+            class="w-full py-3 bg-blue-600 text-white rounded-xl text-center font-bold hover:bg-blue-700 transition">
                 Join Room
             </a>
-        </div>
-        {% empty %}
-        <div class="col-span-full py-20 text-center">
-            <p class="text-gray-400">No active rooms. Be the first to create one!</p>
         </div>
         {% endfor %}
     </div>
 </div>
+
+<div id="editGroupModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeEditGroupModal()"></div>
+        <div class="relative bg-white rounded-[2.5rem] shadow-xl max-w-md w-full p-10 transform transition-all">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Edit Group</h2>
+            <p class="text-gray-400 mb-8 text-sm">Đổi tên phòng để mọi người dễ nhận diện hơn.</p>
+            
+            <form id="editGroupForm">
+                {% csrf_token %}
+                <input type="hidden" id="edit_room_code">
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Room Name</label>
+                        <input type="text" id="edit_group_name" name="name" class="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-blue-500 outline-none" required>
+                    </div>
+                    <div class="flex gap-4">
+                        <button type="submit" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition">Save</button>
+                        <button type="button" onclick="closeEditGroupModal()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold hover:bg-slate-200 transition">Cancel</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+async function openEditGroupModal(code) {
+    try {
+        const response = await fetch(`/api/groups/${code}/`);
+        const data = await response.json();
+        
+        document.getElementById('edit_room_code').value = data.room_code;
+        document.getElementById('edit_group_name').value = data.name;
+        
+        document.getElementById('editGroupModal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    } catch (e) {
+        Swal.fire('Lỗi', 'Không thể lấy dữ liệu phòng', 'error');
+    }
+}
+
+function closeEditGroupModal() {
+    document.getElementById('editGroupModal').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
+
+document.getElementById('editGroupForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const code = document.getElementById('edit_room_code').value;
+    const formData = new FormData(this);
+
+    const response = await fetch(`/api/groups/${code}/update/`, {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') }
+    });
+    
+    const result = await response.json();
+    if (result.status === 'success') {
+        location.reload(); // Reload để cập nhật tên mới trên danh sách
+    }
+});
+
+function confirmDeleteGroup(code, name) {
+    Swal.fire({
+        title: 'Xóa phòng học?',
+        text: `Phòng "${name}" sẽ bị đóng vĩnh viễn. Lịch sử học tập của các thành viên sẽ không bị ảnh hưởng.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'Xóa ngay',
+        cancelButtonText: 'Hủy'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById(`delete-group-${code}`).submit();
+        }
+    });
+}
+</script>
+
 {% endblock %}

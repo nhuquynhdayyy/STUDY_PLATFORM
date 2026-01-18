@@ -4,7 +4,7 @@ from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from .services import StudyService, RoomService
-from .models import Subject, StudySession, GroupRoom
+from .models import Subject, StudySession, GroupRoom, RoomMember
 from django.db.models import Sum
 from django.db import transaction
 from django.utils import timezone
@@ -23,6 +23,8 @@ from django.views.generic.edit import UpdateView, DeleteView
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
+from django.db.models import Count, Q
 
 class DashboardView(LoginRequiredMixin, View):
     def get(self, request):
@@ -245,8 +247,11 @@ class CreateRoomView(LoginRequiredMixin, View):
 
 class GroupListView(LoginRequiredMixin, View):
     def get(self, request):
-        # Lấy các phòng đang hoạt động
-        active_rooms = GroupRoom.objects.filter(is_active=True).order_by('-created_at')
+        # Đếm số member thực tế đang Online trong từng phòng
+        active_rooms = GroupRoom.objects.filter(is_active=True).annotate(
+            online_count=Count('members', filter=Q(members__leave_time__isnull=True))
+        ).order_by('-created_at')
+        
         return render(request, 'group_list.html', {'active_rooms': active_rooms})
     
 class JoinGroupRoomView(View):
@@ -272,11 +277,22 @@ class JoinGroupRoomView(View):
     
 class LeaveRoomView(LoginRequiredMixin, View):
     def post(self, request, room_code):
-        # 1. Sử dụng StudyService để kết thúc phiên học hiện tại của user
-        # Hàm end_session chúng ta đã viết trước đó sẽ tìm session 'active' và đóng nó
+        # 1. Kết thúc session học tập (Logic cũ của bạn)
         StudyService.end_session(request.user)
         
-        # 2. Sau khi đã đóng session và lưu lịch sử, chuyển về dashboard
+        # 2. BỔ SUNG: Cập nhật leave_time cho thành viên này trong bảng RoomMember
+        room = get_object_or_404(GroupRoom, room_code=room_code)
+        RoomMember.objects.filter(
+            room=room, 
+            user=request.user, 
+            leave_time__isnull=True
+        ).update(leave_time=timezone.now())
+        
+        # 3. (Tùy chọn) Nếu không còn ai trong phòng, có thể tắt is_active của phòng
+        if not RoomMember.objects.filter(room=room, leave_time__isnull=True).exists():
+            room.is_active = False # Hoặc giữ True nếu muốn phòng luôn mở
+            room.save()
+
         return redirect('dashboard')
     
 class SubjectUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
@@ -327,3 +343,45 @@ def subject_update_api(request, pk):
         return JsonResponse({"status": "success", "name": name, "color": color})
     
     return JsonResponse({"status": "error", "message": "Dữ liệu không hợp lệ"}, status=400)
+
+# 1. API Lấy thông tin phòng để điền vào Modal
+@login_required
+def group_detail_api(request, room_code):
+    room = get_object_or_404(GroupRoom, room_code=room_code)
+    # Kiểm tra quyền Host
+    if room.host != request.user:
+        return JsonResponse({"error": "Bạn không có quyền"}, status=403)
+    
+    return JsonResponse({
+        "name": room.name,
+        "room_code": room.room_code
+    })
+
+# 2. API Cập nhật thông tin phòng
+@login_required
+@require_http_methods(["POST"])
+def group_update_api(request, room_code):
+    room = get_object_or_404(GroupRoom, room_code=room_code)
+    if room.host != request.user:
+        return JsonResponse({"error": "Chỉ Host mới có quyền sửa"}, status=403)
+    
+    new_name = request.POST.get('name')
+    if new_name:
+        room.name = new_name
+        room.save()
+        return JsonResponse({"status": "success", "new_name": new_name})
+    return JsonResponse({"status": "error"}, status=400)
+
+# 3. View Xóa phòng (Sử dụng Class-based để tận dụng UserPassesTestMixin)
+class GroupDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    model = GroupRoom
+    slug_field = 'room_code'
+    slug_url_kwarg = 'room_code'
+    success_url = reverse_lazy('group_list')
+
+    def test_func(self):
+        room = self.get_object()
+        return room.host == self.request.user
+    
+    # Do StudySession có group_room = models.SET_NULL, 
+    # nên xóa GroupRoom thì lịch sử học tập (duration) vẫn được bảo toàn.
