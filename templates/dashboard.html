@@ -85,6 +85,42 @@
         </div>
     </div>
 
+    <!-- Upcoming Tasks Section -->
+    <div class="mb-10">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-slate-800">Focus Tasks</h2>
+            <span class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-bold">{{ upcoming_tasks|length }} Pending</span>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for task in upcoming_tasks %}
+            <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between hover:border-teal-200 transition">
+                <div class="flex items-center gap-4">
+                    <div class="w-2 h-10 rounded-full" style="background-color: {{ task.subject.color }}"></div>
+                    <div>
+                        <h4 class="font-bold text-slate-800">{{ task.title }}</h4>
+                        <p class="text-xs text-slate-400">Progress: {{ task.progress_percent }}%</p>
+                    </div>
+                </div>
+                
+                <!-- Đây là nút trả lời câu hỏi: BƯỚC TIẾP THEO LÀ GÌ? -->
+                <form action="{% url 'start_study' %}" method="POST">
+                    {% csrf_token %}
+                    <input type="hidden" name="subject_id" value="{{ task.subject.id }}">
+                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                    <button type="submit" class="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center hover:bg-teal-600 transition">
+                        <i class="fas fa-play text-xs"></i>
+                    </button>
+                </form>
+            </div>
+            {% empty %}
+            <div class="col-span-full py-10 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200 text-center">
+                <p class="text-slate-400 italic">No active tasks. Click "+ New Task" to set a goal!</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
     <!-- MY SUBJECTS: CẬP NHẬT CARD MỚI NHƯNG GIỮ NÚT START STUDY -->
     <h2 class="text-2xl font-bold mb-8 text-slate-800">My Subjects</h2>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
@@ -166,15 +202,44 @@
 
     // 2. Timer Logic (Nếu có active_session)
     {% if active_session %}
-    const startTime = new Date("{{ active_session.start_time|date:'c' }}").getTime();
-    setInterval(() => {
-        const now = new Date().getTime();
-        const diff = now - startTime;
-        const h = Math.floor(diff / 3600000);
-        const m = Math.floor((diff % 3600000) / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        document.getElementById("live-timer").innerText = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-    }, 1000);
+        const startTime = new Date("{{ active_session.start_time|date:'c' }}").getTime();
+        // Lấy thời gian đã học trước đó của Task này (chuyển sang milliseconds)
+        const prevDuration = {{ active_session.task.actual_duration|default:0 }} * 1000;
+        // Giới hạn thời gian (chuyển sang milliseconds)
+        const timeLimit = {{ active_session.task.estimated_minutes|default:0 }} * 60 * 1000;
+
+        const timerInterval = setInterval(() => {
+            const now = new Date().getTime();
+            const sessionElapsed = now - startTime;
+            const totalElapsed = sessionElapsed + prevDuration;
+
+            // 1. Kiểm tra nếu vượt giới hạn thì tự động End Session
+            if (timeLimit > 0 && totalElapsed >= timeLimit) {
+                clearInterval(timerInterval);
+                Swal.fire({
+                    title: 'Task Completed!',
+                    text: 'Bạn đã hoàn thành mục tiêu thời gian.',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    // Tự động submit form End Session
+                    document.querySelector('form[action*="stop_study"]').submit();
+                });
+            }
+
+            // 2. Hiển thị đồng hồ (Format hh:mm:ss)
+            const diff = totalElapsed; 
+            const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
+            const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+            const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+            document.getElementById("live-timer").innerText = `${h}:${m}:${s}`;
+            
+            // Cảnh báo đỏ nếu sắp hết giờ (còn dưới 30s)
+            if (timeLimit > 0 && (timeLimit - totalElapsed) < 30000) {
+                document.getElementById("live-timer").classList.add("text-red-500", "animate-pulse");
+            }
+        }, 1000);
     {% endif %}
 
     // 3. Join Room Logic (Giữ nguyên Script AJAX cũ của bạn)
@@ -189,79 +254,143 @@
         } catch (e) { console.error(e); }
     });
 
-    // Nút New Task
-    document.querySelector('button:contains("New Task")').onclick = () => toggleModal('newTaskModal');
+    // 1. Sửa lỗi selector: Thay vì dùng :contains (không tồn tại), hãy dùng ID hoặc logic đơn giản hơn
+    function openTaskModal() {
+        document.getElementById('newTaskModal').classList.remove('hidden');
+    }
 
-    // Hàm xử lý Quick Start
-    async function handleQuickStart() {
-        const res = await fetch("{% url 'quick_start_api' %}", {
-            method: 'POST',
-            headers: {'X-CSRFToken': '{{ csrf_token }}'}
-        });
-        const data = await res.json();
+    function closeTaskModal() {
+        document.getElementById('newTaskModal').classList.add('hidden');
+    }
+
+    // 2. Xử lý sự kiện (Chỉ dùng 1 Event Listener duy nhất, tránh xung đột)
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('newTaskForm');
         
-        if (data.redirect) {
-            window.location.reload(); // Tải lại để hiện thanh "Currently Focusing"
-        } else if (data.need_select) {
-            // Sử dụng SweetAlert2 để chọn môn học nếu chưa có môn học gần nhất
-            const { value: subjectId } = await Swal.fire({
-                title: 'Chọn môn học để bắt đầu',
-                input: 'select',
-                inputOptions: {
-                    {% for s in subjects %}'{{ s.id }}': '{{ s.name }}',{% endfor %}
-                },
-                showCancelButton: true,
-                confirmButtonColor: '#0d9488'
-            });
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault(); // QUAN TRỌNG: Chặn gửi POST tới / gây lỗi 405
+            
+            const formData = new FormData(this);
+            const saveBtn = this.querySelector('button[type="submit"]');
+            
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
-            if (subjectId) {
-                // Gọi hàm Start Study bình thường đã có của bạn
-                const formData = new FormData();
-                formData.append('subject_id', subjectId);
-                await fetch("{% url 'start_study' %}", {
+            try {
+                // Sử dụng URL từ thuộc tính action của form
+                const response = await fetch(this.action, {
                     method: 'POST',
                     body: formData,
-                    headers: {'X-CSRFToken': '{{ csrf_token }}'}
+                    headers: {
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                    }
                 });
-                window.location.reload();
+
+                const result = await response.json();
+
+                if (result.success) {
+                    closeTaskModal();
+                    Swal.fire({ icon: 'success', title: 'Task Created!', timer: 1500, showConfirmButton: false })
+                        .then(() => location.reload());
+                } else {
+                    Swal.fire('Error', result.message || 'Lỗi hệ thống', 'error');
+                }
+            } catch (error) {
+                Swal.fire('Error', 'Không thể kết nối máy chủ', 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerText = 'Save Task';
+            }
+        });
+    });
+
+    // 1. Handler cho nút Quick Start (Đảm bảo LUÔN hiện Popup)
+    async function handleQuickStart() {
+        // Hiển thị Popup chọn môn học ngay lập tức từ danh sách subjects đã có trong context
+        const { value: subjectId } = await Swal.fire({
+            title: 'Bắt đầu phiên học nhanh',
+            text: 'Vui lòng chọn môn học bạn muốn tập trung ngay bây giờ:',
+            input: 'select',
+            inputOptions: {
+                {% for s in subjects %}'{{ s.id }}': '{{ s.name }}',{% endfor %}
+            },
+            inputPlaceholder: '-- Chọn môn học --',
+            showCancelButton: true,
+            confirmButtonText: 'Bắt đầu Solo',
+            confirmButtonColor: '#0d9488', // Màu Teal
+            cancelButtonText: 'Hủy',
+            inputValidator: (value) => {
+                if (!value) return 'Bạn cần chọn một môn học!';
+            }
+        });
+
+        if (subjectId) {
+            // Gửi yêu cầu bắt đầu học tới StartStudyAction (Logic chuẩn của hệ thống)
+            const formData = new FormData();
+            formData.append('subject_id', subjectId);
+            
+            const res = await fetch("{% url 'start_study' %}", {
+                method: 'POST',
+                body: formData,
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}
+            });
+
+            if (res.ok) {
+                window.location.reload(); // Reload để hiện thanh "Currently Focusing"
+            } else {
+                Swal.fire('Lỗi', 'Không thể bắt đầu phiên học', 'error');
             }
         }
     }
 
-    // Xử lý nộp form New Task qua AJAX
-    document.getElementById('newTaskForm').onsubmit = async function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        const res = await fetch("{% url 'create_task_api' %}", {
-            method: 'POST',
-            body: formData,
-            headers: {'X-CSRFToken': '{{ csrf_token }}'}
-        });
-        const result = await res.json();
-        if (result.success) {
-            Swal.fire('Thành công', 'Đã lưu nhiệm vụ mới', 'success').then(() => location.reload());
+    // 2. Handler cho nút New Task (Giữ nguyên logic fix trước đó)
+    function openTaskModal() {
+        document.getElementById('newTaskModal').classList.remove('hidden');
+    }
+
+    // Đảm bảo gắn đúng sự kiện vào nút bấm khi trang load xong
+    document.addEventListener('DOMContentLoaded', function() {
+        // Tìm nút Quick Start và gắn handler
+        const quickStartBtn = document.querySelector('button[onclick="handleQuickStart()"]');
+        if (quickStartBtn) {
+            quickStartBtn.addEventListener('click', handleQuickStart);
         }
-    };
+    });
+
+    const timeLimitSeconds = {{ active_session.task.estimated_minutes|default:0 }} * 60;
+
+    setInterval(() => {
+        const diffSeconds = Math.floor((new Date().getTime() - startTime) / 1000);
+        
+        // CẢNH BÁO NẾU VƯỢT QUÁ DỰ KIẾN
+        if (timeLimitSeconds > 0 && diffSeconds > timeLimitSeconds) {
+            document.getElementById("live-timer").classList.add("text-red-500", "animate-pulse");
+        }
+        // ... render timer ...
+    }, 1000);
 </script>
 
 <!-- Modal New Task -->
 <div id="newTaskModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm">
     <div class="flex items-center justify-center min-h-screen">
-        <form id="newTaskForm" class="bg-white p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl">
+        <!-- Bổ sung method POST và chặn action mặc định -->
+        <form id="newTaskForm" action="{% url 'create_task_api' %}" method="POST" class="bg-white p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl">
             {% csrf_token %}
             <h3 class="text-2xl font-bold mb-6">Create New Task</h3>
             <div class="space-y-4">
-                <input type="text" name="title" placeholder="What are you studying?" class="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-teal-500" required>
-                <select name="subject_id" class="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-teal-500">
+                <input type="text" name="title" id="task_title" placeholder="What are you studying?" class="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-teal-500" required>
+                <select name="subject_id" id="task_subject" class="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-teal-500">
                     {% for s in subjects %}
                     <option value="{{ s.id }}">{{ s.name }}</option>
                     {% endfor %}
                 </select>
-                <input type="number" name="est_minutes" placeholder="Est. minutes (e.g. 45)" class="w-full p-4 bg-slate-50 border-none rounded-2xl">
+                <!-- Đổi tên field cho đồng nhất với Backend (estimated_minutes) -->
+                <input type="number" name="estimated_minutes" id="task_est" placeholder="Est. minutes (e.g. 45)" class="w-full p-4 bg-slate-50 border-none rounded-2xl">
             </div>
             <div class="flex gap-3 mt-8">
-                <button type="submit" class="flex-1 bg-teal-600 text-white py-4 rounded-2xl font-bold">Save Task</button>
-                <button type="button" onclick="toggleModal('newTaskModal')" class="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold">Cancel</button>
+                <button type="submit" class="flex-1 bg-teal-600 text-white py-4 rounded-2xl font-bold hover:bg-teal-700 transition">Save Task</button>
+                <!-- BẮT BUỘC: Thêm type="button" để không làm submit form -->
+                <button type="button" onclick="closeTaskModal()" class="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold hover:bg-slate-200 transition">Cancel</button>
             </div>
         </form>
     </div>

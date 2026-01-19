@@ -48,6 +48,8 @@ class StudySession(models.Model):
     name_snapshot = models.CharField(max_length=255, null=True, blank=True)
     color_snapshot = models.CharField(max_length=7, null=True, blank=True)
 
+    task = models.ForeignKey('Task', on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions')
+    
     class Meta:
         ordering = ['-start_time']
 
@@ -108,3 +110,4 @@ class Task(models.Model):
     notes = models.TextField(null=True, blank=True)
     is_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    actual_duration = models.PositiveIntegerField(default=0) 

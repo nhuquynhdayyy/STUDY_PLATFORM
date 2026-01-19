@@ -52,8 +52,35 @@ class DashboardView(LoginRequiredMixin, View):
             day_sec = StudySession.objects.filter(user=user, start_time__date=day, status='completed').aggregate(t=Sum('duration'))['t'] or 0
             chart_data.append(round(day_sec / 3600, 2))
 
-        # --- GIỮ NGUYÊN LOGIC CŨ ---
+        # THÊM: Lấy danh sách Task chưa hoàn thành
+        upcoming_tasks = Task.objects.filter(user=user, is_completed=False).select_related('subject').order_by('created_at')
+
+        for t in upcoming_tasks:
+            total_est_sec = t.estimated_minutes * 60
+            # Tính %: (Thời gian thực tế / Thời gian dự kiến) * 100
+            t.progress_percent = min(int((t.actual_duration / total_est_sec) * 100), 100) if total_est_sec > 0 else 0
+            
+        # THÊM: Tính toán lại progress cho từng Subject dựa trên thời gian học thực tế / Est. Time
         subjects = Subject.objects.filter(user=user)
+        for s in subjects:
+            # 1. Tổng thời gian dự kiến của các Task thuộc môn này
+            total_est = Task.objects.filter(subject=s).aggregate(Sum('estimated_minutes'))['estimated_minutes__sum'] or 0
+            
+            # 2. CHỈ lấy thời gian của các Session có gắn với Task của môn này
+            total_actual_sec = StudySession.objects.filter(
+                subject=s, 
+                task__isnull=False, # QUAN TRỌNG: Chỉ tính session làm task
+                status='completed'
+            ).aggregate(Sum('duration'))['duration__sum'] or 0
+            
+            total_actual_min = total_actual_sec / 60
+
+            if total_est > 0:
+                s.progress = min(int((total_actual_min / total_est) * 100), 100)
+            else:
+                s.progress = 0
+            s.save()
+
         active_session = StudySession.objects.filter(user=user, status='active').first()
         recent_history = StudySession.objects.filter(
             user=user, status='completed'
@@ -69,6 +96,10 @@ class DashboardView(LoginRequiredMixin, View):
             'recent_history': recent_history,
             'now': now
         }
+        context.update({
+            'upcoming_tasks': upcoming_tasks,
+            'subjects': subjects, # subjects bây giờ đã có progress thật
+        })
         return render(request, 'dashboard.html', context)
 
 class HistoryListView(LoginRequiredMixin, ListView):
@@ -96,15 +127,18 @@ class HistoryListView(LoginRequiredMixin, ListView):
 class StartStudyAction(LoginRequiredMixin, View):
     def post(self, request):
         subject_id = request.POST.get('subject_id')
+        task_id = request.POST.get('task_id')
         subject = Subject.objects.get(id=subject_id, user=request.user)
-        
+        task = Task.objects.filter(id=task_id, user=request.user).first() if task_id else None
+
         with transaction.atomic():
             if not StudySession.objects.filter(user=request.user, status='active').exists():
                 StudySession.objects.create(
                     user=request.user, 
                     subject=subject,
-                    name_snapshot=subject.name,  # LƯU TÊN LẠI
-                    color_snapshot=subject.color # LƯU MÀU LẠI
+                    task=task,
+                    name_snapshot=subject.name,
+                    color_snapshot=subject.color
                 )
         return redirect('dashboard')
 
@@ -118,7 +152,16 @@ class StopStudyAction(LoginRequiredMixin, View):
                 session.duration = int(delta.total_seconds())
                 session.status = 'completed'
                 session.save()
-        
+
+                # LOGIC QUAN TRỌNG: Cập nhật tích lũy cho Task
+                if session.task:
+                    task = session.task
+                    task.actual_duration += session.duration
+                    # Kiểm tra hoàn thành Task
+                    if task.actual_duration >= (task.estimated_minutes * 60):
+                        task.is_completed = True
+                    task.save()
+
         return redirect('dashboard')
     
 class StatisticsView(LoginRequiredMixin, TemplateView):
@@ -461,36 +504,31 @@ class QuickStartView(LoginRequiredMixin, View):
 # Logic cho nút Quick Start
 class QuickStartAPI(LoginRequiredMixin, View):
     def post(self, request):
-        # Tìm phiên học gần nhất của user để lấy môn học
-        last_session = StudySession.objects.filter(user=request.user).order_by('-start_time').first()
-        
-        if last_session and last_session.subject:
-            # Tạo ngay phiên học mới với môn học đó
-            StudySession.objects.create(
-                user=request.user,
-                subject=last_session.subject,
-                session_type='solo',
-                status='active'
-            )
-            return JsonResponse({"success": True, "redirect": True})
-        else:
-            # Nếu chưa từng học môn nào, báo cho Frontend hiện Modal chọn môn
-            return JsonResponse({"success": True, "redirect": False, "need_select": True})
+        # Không tự ý tạo StudySession ở đây nữa.
+        # Luôn yêu cầu Frontend hiển thị Popup chọn môn học.
+        return JsonResponse({
+            "success": True, 
+            "redirect": False, 
+            "need_select": True 
+        })
 
 # Logic cho nút New Task
 class CreateTaskAPI(LoginRequiredMixin, View):
     def post(self, request):
         title = request.POST.get('title')
         subject_id = request.POST.get('subject_id')
-        est_minutes = request.POST.get('est_minutes', 30)
+        # Lấy đúng tên field từ HTML gửi lên
+        est_minutes = request.POST.get('estimated_minutes', 30)
 
-        if title and subject_id:
-            subject = get_object_or_404(Subject, id=subject_id, user=request.user)
-            Task.objects.create(
-                user=request.user,
-                subject=subject,
-                title=title,
-                estimated_minutes=est_minutes
-            )
-            return JsonResponse({"success": True, "message": "Task created!"})
-        return JsonResponse({"success": False, "message": "Missing data"}, status=400)
+        if not title or not subject_id:
+            return JsonResponse({"success": False, "message": "Vui lòng nhập đầy đủ thông tin"}, status=400)
+
+        subject = get_object_or_404(Subject, id=subject_id, user=request.user)
+        
+        Task.objects.create(
+            user=request.user,
+            subject=subject,
+            title=title,
+            estimated_minutes=est_minutes
+        )
+        return JsonResponse({"success": True, "message": "Task created successfully!"})
