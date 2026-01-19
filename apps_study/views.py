@@ -24,22 +24,51 @@ from django.contrib.auth.mixins import UserPassesTestMixin
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDay
 
 class DashboardView(LoginRequiredMixin, View):
     def get(self, request):
-        subjects = Subject.objects.filter(user=request.user)
-        active_session = StudySession.objects.filter(user=request.user, status='active').first()
-        
-        # BỔ SUNG select_related('group_room')
+        user = request.user
+        now = timezone.now()
+        start_of_week = now.date() - timedelta(days=now.weekday())
+
+        # 1. Tính tổng giờ học tuần này từ Database
+        weekly_sec = StudySession.objects.filter(
+            user=user, status='completed', start_time__date__gte=start_of_week
+        ).aggregate(total=Sum('duration'))['total'] or 0
+        total_hours = round(weekly_sec / 3600, 1)
+
+        # 2. Tính Streak (Số ngày học liên tiếp)
+        streak = 0
+        check_date = now.date()
+        while StudySession.objects.filter(user=user, start_time__date=check_date, status='completed').exists():
+            streak += 1
+            check_date -= timedelta(days=1)
+
+        # 3. Dữ liệu biểu đồ (Phân bổ 7 ngày)
+        chart_data = []
+        for i in range(7):
+            day = start_of_week + timedelta(days=i)
+            day_sec = StudySession.objects.filter(user=user, start_time__date=day, status='completed').aggregate(t=Sum('duration'))['t'] or 0
+            chart_data.append(round(day_sec / 3600, 2))
+
+        # --- GIỮ NGUYÊN LOGIC CŨ ---
+        subjects = Subject.objects.filter(user=user)
+        active_session = StudySession.objects.filter(user=user, status='active').first()
         recent_history = StudySession.objects.filter(
-            user=request.user, status='completed'
+            user=user, status='completed'
         ).select_related('subject', 'group_room').order_by('-end_time')[:5]
         
         context = {
+            'total_hours': total_hours,
+            'streak': streak,
+            'goal_percent': int((total_hours / user.weekly_goal) * 100) if user.weekly_goal > 0 else 0,
+            'chart_data': chart_data,
             'subjects': subjects,
             'active_session': active_session,
             'recent_history': recent_history,
+            'now': now
         }
         return render(request, 'dashboard.html', context)
 

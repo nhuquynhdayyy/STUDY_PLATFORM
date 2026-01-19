@@ -8,7 +8,8 @@ import random
 import string
 
 class User(AbstractUser):
-    pass # Để trống để mở rộng sau này
+    # Mục tiêu giờ học mỗi tuần (mặc định 20 giờ)
+    weekly_goal = models.PositiveIntegerField(default=20) 
 
 class Subject(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='user_subjects')
@@ -16,6 +17,8 @@ class Subject(models.Model):
     # Lưu mã màu để hiển thị giao diện cho đẹp
     color = models.CharField(max_length=7, default="#3b82f6") 
     created_at = models.DateTimeField(auto_now_add=True)
+    # Thêm trường tiến độ học tập (0-100%)
+    progress = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return self.name
@@ -73,6 +76,22 @@ class StudySession(models.Model):
         if self.session_type == 'solo' and self.subject:
             return self.subject.color
         return "#1e293b" # Màu mặc định cho Group
+    
+    @property
+    def formatted_duration(self):
+        """Chuyển đổi giây sang định dạng hh : mm : ss"""
+        total_seconds = self.duration
+        
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        if hours > 0:
+            # Định dạng: 01h 02m 05s
+            return f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
+        else:
+            # Định dạng: 05m 02s (Nếu dưới 1 tiếng thì không hiện 00h)
+            return f"{minutes:02d}m {seconds:02d}s"
 
 class RoomMember(models.Model):
     room = models.ForeignKey(GroupRoom, on_delete=models.CASCADE, related_name='members')

@@ -52,19 +52,7 @@
                 
                 <!-- Cột 4: Tổng thời lượng -->
                 <td class="px-8 py-5 text-right font-mono font-bold text-teal-600">
-                    <span id="dur-h-{{ record.id }}"></span>
-                    <script>
-                        (function() {
-                            var s = {{ record.duration }};
-                            var h = Math.floor(s/3600);
-                            var m = Math.floor((s%3600)/60);
-                            var sec = s % 60;
-                            var text = "";
-                            if(h > 0) text += h + "h ";
-                            text += m + "m " + sec + "s";
-                            document.getElementById("dur-h-{{ record.id }}").innerText = text;
-                        })();
-                    </script>
+                    {{ record.formatted_duration }}
                 </td>
             </tr>
             {% empty %}
