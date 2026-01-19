@@ -4,7 +4,7 @@ from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from .services import StudyService, RoomService
-from .models import Subject, StudySession, GroupRoom, RoomMember
+from .models import Subject, StudySession, GroupRoom, RoomMember, Task
 from django.db.models import Sum
 from django.db import transaction
 from django.utils import timezone
@@ -21,9 +21,8 @@ import random
 import string
 from django.views.generic.edit import UpdateView, DeleteView
 from django.contrib.auth.mixins import UserPassesTestMixin
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncDay
 
@@ -417,3 +416,81 @@ class GroupDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     
     # Do StudySession có group_room = models.SET_NULL, 
     # nên xóa GroupRoom thì lịch sử học tập (duration) vẫn được bảo toàn.
+
+@login_required
+def create_task_api(request):
+    if request.method == "POST":
+        # Logic trích xuất dữ liệu từ POST request
+        subject_id = request.POST.get("subject_id")
+        title = request.POST.get("title")
+        estimated_minutes = request.POST.get("estimated_minutes")
+        due_date = request.POST.get("due_date")
+        notes = request.POST.get("notes")
+
+        subject = get_object_or_404(Subject, id=subject_id, user=request.user)
+
+        task = Task.objects.create(
+            user=request.user,
+            subject=subject,
+            title=title,
+            estimated_minutes=estimated_minutes,
+            due_date=due_date,
+            notes=notes
+        )
+
+        return JsonResponse({"success": True, "message": "Task created!"})
+    
+class QuickStartView(LoginRequiredMixin, View):
+    def post(self, request):
+        # 1. Tìm môn học gần nhất
+        last_session = StudySession.objects.filter(user=request.user).order_by('-start_time').first()
+        
+        if last_session and last_session.subject:
+            # 2. Tạo phiên học mới ngay lập tức
+            new_session = StudySession.objects.create(
+                user=request.user,
+                subject=last_session.subject,
+                session_type='solo',
+                status='active'
+            )
+            return JsonResponse({"redirect": True, "url": reverse('dashboard')})
+        else:
+            # 3. Trả về tín hiệu yêu cầu hiện Modal chọn môn
+            return JsonResponse({"redirect": False, "need_select": True})
+        
+# Logic cho nút Quick Start
+class QuickStartAPI(LoginRequiredMixin, View):
+    def post(self, request):
+        # Tìm phiên học gần nhất của user để lấy môn học
+        last_session = StudySession.objects.filter(user=request.user).order_by('-start_time').first()
+        
+        if last_session and last_session.subject:
+            # Tạo ngay phiên học mới với môn học đó
+            StudySession.objects.create(
+                user=request.user,
+                subject=last_session.subject,
+                session_type='solo',
+                status='active'
+            )
+            return JsonResponse({"success": True, "redirect": True})
+        else:
+            # Nếu chưa từng học môn nào, báo cho Frontend hiện Modal chọn môn
+            return JsonResponse({"success": True, "redirect": False, "need_select": True})
+
+# Logic cho nút New Task
+class CreateTaskAPI(LoginRequiredMixin, View):
+    def post(self, request):
+        title = request.POST.get('title')
+        subject_id = request.POST.get('subject_id')
+        est_minutes = request.POST.get('est_minutes', 30)
+
+        if title and subject_id:
+            subject = get_object_or_404(Subject, id=subject_id, user=request.user)
+            Task.objects.create(
+                user=request.user,
+                subject=subject,
+                title=title,
+                estimated_minutes=est_minutes
+            )
+            return JsonResponse({"success": True, "message": "Task created!"})
+        return JsonResponse({"success": False, "message": "Missing data"}, status=400)

@@ -26,8 +26,8 @@
         </div>
         {% else %}
         <div class="flex gap-3">
-            <button class="bg-white border border-slate-200 px-6 py-3 rounded-2xl font-bold text-slate-700"><i class="fas fa-plus mr-2"></i>New Task</button>
-            <button class="bg-teal-600 px-6 py-3 rounded-2xl font-bold text-white shadow-lg shadow-teal-100">Quick Start</button>
+            <button onclick="document.getElementById('newTaskModal').classList.remove('hidden')" class="bg-white border border-slate-200 px-6 py-3 rounded-2xl font-bold text-slate-700"><i class="fas fa-plus mr-2"></i>New Task</button>
+            <button onclick="handleQuickStart()" class="bg-teal-600 px-6 py-3 rounded-2xl font-bold text-white shadow-lg shadow-teal-100">Quick Start</button>
         </div>
         {% endif %}
     </div>
@@ -188,5 +188,83 @@
             else Swal.fire('Error', result.message, 'error');
         } catch (e) { console.error(e); }
     });
+
+    // Nút New Task
+    document.querySelector('button:contains("New Task")').onclick = () => toggleModal('newTaskModal');
+
+    // Hàm xử lý Quick Start
+    async function handleQuickStart() {
+        const res = await fetch("{% url 'quick_start_api' %}", {
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'}
+        });
+        const data = await res.json();
+        
+        if (data.redirect) {
+            window.location.reload(); // Tải lại để hiện thanh "Currently Focusing"
+        } else if (data.need_select) {
+            // Sử dụng SweetAlert2 để chọn môn học nếu chưa có môn học gần nhất
+            const { value: subjectId } = await Swal.fire({
+                title: 'Chọn môn học để bắt đầu',
+                input: 'select',
+                inputOptions: {
+                    {% for s in subjects %}'{{ s.id }}': '{{ s.name }}',{% endfor %}
+                },
+                showCancelButton: true,
+                confirmButtonColor: '#0d9488'
+            });
+
+            if (subjectId) {
+                // Gọi hàm Start Study bình thường đã có của bạn
+                const formData = new FormData();
+                formData.append('subject_id', subjectId);
+                await fetch("{% url 'start_study' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {'X-CSRFToken': '{{ csrf_token }}'}
+                });
+                window.location.reload();
+            }
+        }
+    }
+
+    // Xử lý nộp form New Task qua AJAX
+    document.getElementById('newTaskForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const res = await fetch("{% url 'create_task_api' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {'X-CSRFToken': '{{ csrf_token }}'}
+        });
+        const result = await res.json();
+        if (result.success) {
+            Swal.fire('Thành công', 'Đã lưu nhiệm vụ mới', 'success').then(() => location.reload());
+        }
+    };
 </script>
+
+<!-- Modal New Task -->
+<div id="newTaskModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm">
+    <div class="flex items-center justify-center min-h-screen">
+        <form id="newTaskForm" class="bg-white p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl">
+            {% csrf_token %}
+            <h3 class="text-2xl font-bold mb-6">Create New Task</h3>
+            <div class="space-y-4">
+                <input type="text" name="title" placeholder="What are you studying?" class="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-teal-500" required>
+                <select name="subject_id" class="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-teal-500">
+                    {% for s in subjects %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="number" name="est_minutes" placeholder="Est. minutes (e.g. 45)" class="w-full p-4 bg-slate-50 border-none rounded-2xl">
+            </div>
+            <div class="flex gap-3 mt-8">
+                <button type="submit" class="flex-1 bg-teal-600 text-white py-4 rounded-2xl font-bold">Save Task</button>
+                <button type="button" onclick="toggleModal('newTaskModal')" class="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
